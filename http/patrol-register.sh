@@ -37,7 +37,7 @@ LOGIN_RESP=$(curl -s -X POST "$ADMIN_API/auth/login" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}")
 
-ADMIN_TOKEN=*** "$LOGIN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token',''))")
+ADMIN_TOKEN=*** "$LOGIN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token',''))"
 
 if [ -z "$ADMIN_TOKEN" ]; then
   echo "❌ 登录管理平台失败"
