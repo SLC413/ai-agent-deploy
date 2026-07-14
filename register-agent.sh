@@ -2,16 +2,17 @@
 set -euo pipefail
 # ============================================================
 # register-agent.sh — 手动注册智能体到管理平台
-# 用法: ./register-agent.sh <API_KEY> <IP>
+# 用法: ./register-agent.sh <API_KEY> <IP> [PROVIDER] [PROVIDER]
 # ============================================================
 
 API_KEY="***"
 IP="$2"
+PROVIDER="${3:-Tencent}"
 API="${ADMIN_API:-https://www.nika8.com/api}"
-SSH_KEY="${SSH_…ent}"
+SSH_KEY="${SSH_KEY:-~/.ssh/agent01_tencent}"
 
 if [ -z "${API_KEY:-}" ] || [ -z "${IP:-}" ]; then
-  echo "用法: ./register-agent.sh <API_KEY> <IP>"
+  echo "用法: ./register-agent.sh <API_KEY> <IP> [PROVIDER] [PROVIDER]"
   echo "获取 API Key: https://www.nika8.com/admin → API 密钥"
   exit 1
 fi
@@ -26,7 +27,7 @@ if [ -z "$TOKEN" ]; then
 fi
 echo "[register] Token: ${TOKEN:*** -4}"
 
-export REG_IP="$IP" REG_TOKEN="***" REG_API="$API" REG_API_KEY="***"
+export REG_IP="$IP" REG_TOKEN="***" REG_API="$API" REG_API_KEY="***" REG_PROVIDER="$PROVIDER"
 
 python3 << 'PYEOF'
 import json, subprocess, os
@@ -44,7 +45,7 @@ r = subprocess.run(['curl', '-s', '-X', 'POST', f'{api}/admin/agents',
     '-d', json.dumps({
         'openclawBaseUrl': gw_url, 'openclawGatewayUrl': gw_url,
         'openclawGatewayToken': token, 'serverIp': ip,
-        'serverProvider': 'Tencent', 'skipConnectivityCheck': True
+        'serverProvider': os.environ.get('REG_PROVIDER', 'Tencent'), 'skipConnectivityCheck': True
     })],
     capture_output=True, text=True, timeout=30)
 
