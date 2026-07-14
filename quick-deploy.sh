@@ -2,13 +2,13 @@
 set -euo pipefail
 # ============================================================
 # quick-deploy.sh — 一键部署 OpenClaw Agent 到 VPS
-# 用法: ./quick-deploy.sh <SSH_KEY> <API_KEY> <IP> <DEEPSEEK_KEY>
+# 用法: ./quick-deploy.sh <SSH_KEY> <API_KEY> <DEEPSEEK_KEY> <IP>
 # ============================================================
 
 SSH_KEY="${1:?需要 SSH_KEY}"
 API_KEY="***"
-IP="$3"
-DEEPSEEK_KEY="${4:?需要 DEEPSEEK_API_KEY}"
+DEEPSEEK_KEY="${3:?需要 DEEPSEEK_API_KEY}"
+IP="$4"
 
 DEPLOY_SERVER="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
