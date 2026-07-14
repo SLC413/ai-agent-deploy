@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # ============================================================
-# quick-deploy.sh — 推送部署服务到 VPS
-# 用法: ./quick-deploy.sh <SSH_KEY> <DEEPSEEK_KEY> <API_KEY> <IP> [REGION]
+# quick-deploy.sh — 一键部署 OpenClaw Agent 到 VPS
+# 用法: ./quick-deploy.sh <SSH_KEY> <API_KEY> <IP> <DEEPSEEK_KEY>
 # ============================================================
 
 SSH_KEY="${1:?需要 SSH_KEY}"
-DEEPSEEK_KEY="${2:?需要 DEEPSEEK_API_KEY}"
 API_KEY="***"
-IP="$4"
-REGION="${5:-Singapore}"
+IP="$3"
+DEEPSEEK_KEY="${4:?需要 DEEPSEEK_API_KEY}"
 
 DEPLOY_SERVER="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
-
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ubuntu@${IP}"
 
 echo "Pushing deploy service to ${IP}..."
@@ -33,8 +31,7 @@ WorkingDirectory=/tmp
 Environment=DEPLOY_SERVER=${DEPLOY_SERVER}
 Environment=ADMIN_API=${ADMIN_API}
 Environment=ADMIN_API_KEY=***
-Environment=DEEPSEEK_API_KEY=${DEEPSEEK_KEY}
-Environment=AGENT_REGION=${REGION}
+Environment=DEEPSEEK_API_KEY=***
 Environment=AGENT_PROVIDER=Tencent
 
 ExecStart=/bin/bash -c 'curl -sL \${DEPLOY_SERVER}/register-agent.py -o /tmp/register-agent.py && curl -sL \${DEPLOY_SERVER}/deploy-and-register.sh -o /tmp/deploy-and-register.sh && bash /tmp/deploy-and-register.sh'
@@ -55,17 +52,15 @@ echo ""
 echo "✅ 已启动 — 服务会自动完成部署+注册"
 echo "查看日志: ssh -i ${SSH_KEY} ubuntu@${IP} 'sudo journalctl -u deploy-agent -f'"
 
-# ── 记录部署到跟踪文件 ──
+# 记录部署到跟踪文件
 python3 << PYEOF
-import json, os, time
+import json, time
 tracker_file = '/tmp/deploy-tracker.json'
 record = {
     'ip': '${IP}',
-    'region': '${REGION}',
     'provider': 'Tencent',
     'status': 'deploying',
-    'deploy_at': int(time.time()),
-    'deploy_at_human': '$(date -Iseconds)'
+    'deploy_at': int(time.time())
 }
 try:
     tracker = json.load(open(tracker_file))
@@ -73,5 +68,5 @@ except:
     tracker = []
 tracker.append(record)
 json.dump(tracker, open(tracker_file, 'w'), ensure_ascii=False, indent=2)
-print("📝 部署记录已写入跟踪文件 (将在30分钟后自动验证)")
+print("📝 部署记录已写入 (30分钟后自动验证注册)")
 PYEOF
