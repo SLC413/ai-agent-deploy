@@ -17,10 +17,14 @@ api = os.environ.get('ADMIN_API', 'https://www.nika8.com/api')
 ssh_key = os.path.expanduser(os.environ.get('SSH_KEY', '~/.ssh/agent01_tencent'))
 
 # 1. Get Gateway Token from remote VPS
-print(f'[register] Reading {ip} Gateway Token...')
+# Read Gateway Token: locally if no SSH key, else via SSH
 py_cmd = "import json; print(json.load(open('/home/ubuntu/.openclaw/openclaw.json'))['gateway']['auth']['token'])"
-# Use stdin to avoid shell quoting issues
-r = subprocess.run(['ssh', '-i', ssh_key, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10', f'ubuntu@{ip}', 'python3'], input=py_cmd, capture_output=True, text=True, timeout=15)
+if os.path.exists(os.path.expanduser(ssh_key)):
+    print(f'[register] Reading {ip} Gateway Token via SSH...')
+    r = subprocess.run(['ssh', '-i', ssh_key, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10', f'ubuntu@{ip}', 'python3'], input=py_cmd, capture_output=True, text=True, timeout=15)
+else:
+    print('[register] Reading local Gateway Token...')
+    r = subprocess.run(['python3', '-c', py_cmd], capture_output=True, text=True, timeout=10)
 
 gw_token = r.stdout.strip()
 if not gw_token:
