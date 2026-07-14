@@ -3,8 +3,15 @@
 Usage: ./register-agent.py <API_KEY> <IP> [PROVIDER]"""
 import json, subprocess, os, sys
 
-api_key = sys.argv[1]
-ip = sys.argv[2]
+api_key = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('ADMIN_API_KEY', '')
+ip = sys.argv[2] if len(sys.argv) > 2 else os.environ.get('PUBLIC_IP', '')
+if not ip:
+    import urllib.request
+    for url in ('https://ifconfig.me', 'https://ip.sb', 'https://api.ipify.org'):
+        try:
+            ip = urllib.request.urlopen(url, timeout=5).read().decode().strip()
+            if ip: break
+        except: pass
 provider = sys.argv[3] if len(sys.argv) > 3 else 'Tencent'
 api = os.environ.get('ADMIN_API', 'https://www.nika8.com/api')
 ssh_key = os.path.expanduser(os.environ.get('SSH_KEY', '~/.ssh/agent01_tencent'))

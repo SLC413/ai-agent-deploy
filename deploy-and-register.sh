@@ -95,7 +95,7 @@ log "Config OK"
 
 # 9. Register
 log "Registering to hot pool..."
-python3 /tmp/register-agent.py --api-key 2>&1 && log "Register OK" || log "Register had issues (non-fatal)"
+python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$(curl -s ifconfig.me || curl -s ip.sb)" 2>&1 && log "Register OK" || log "Register had issues (non-fatal)"
 
 # 10. Gateway
 log "Starting Gateway..."
