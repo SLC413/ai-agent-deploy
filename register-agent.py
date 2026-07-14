@@ -1,70 +1,48 @@
 #!/usr/bin/env python3
-import json, sys, os, subprocess
+"""register-agent — Register an OpenClaw agent on the management platform.
+Usage: ./register-agent.py <API_KEY> <IP> [PROVIDER]"""
+import json, subprocess, os, sys
 
-API = os.environ.get("ADMIN_API", "https://www.nika8.com/api")
-EMAIL = os.environ.get("ADMIN_EMAIL", "")
-PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-API_KEY = os.environ.get("ADMIN_API_KEY", "")
-REGION = os.environ.get("AGENT_REGION", "Unknown")
-PROVIDER = os.environ.get("AGENT_PROVIDER", "Tencent")
-CONFIG = os.environ.get("OPENCLAW_CONFIG", "/home/ubuntu/.openclaw/openclaw.json")
+api_key = sys.argv[1]
+ip = sys.argv[2]
+provider = sys.argv[3] if len(sys.argv) > 3 else 'Tencent'
+api = os.environ.get('ADMIN_API', 'https://www.nika8.com/api')
+ssh_key = os.path.expanduser(os.environ.get('SSH_KEY', '~/.ssh/agent01_tencent'))
 
-def api_call(method, path, data, token):
-    args = ["curl", "-s", "-X", method, API + path, "-H", "Content-Type: application/json"]
-    if token:
-        args.append("-H")
-        args.append("Authorization: Bearer " + token)
-    if data:
-        args.append("-d")
-        args.append(json.dumps(data))
-    r = subprocess.run(args, capture_output=True, text=True, timeout=30)
-    if r.stdout.strip():
-        return json.loads(r.stdout)
-    return {"error": r.stderr.strip()}
+# 1. Get Gateway Token from remote VPS
+print(f'[register] Reading {ip} Gateway Token...')
+py_cmd = "import json; print(json.load(open('/home/ubuntu/.openclaw/openclaw.json'))['gateway']['auth']['token'])"
+# Use stdin to avoid shell quoting issues
+r = subprocess.run(['ssh', '-i', ssh_key, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10', f'ubuntu@{ip}', 'python3'], input=py_cmd, capture_output=True, text=True, timeout=15)
 
-cfg = json.load(open(CONFIG))
-token = cfg["gateway"]["auth"]["token"]
-print("[register] Token: " + token[:8] + "..." + token[-4:])
-
-ip = os.environ.get("PUBLIC_IP", "")
-if not ip:
-    ip = subprocess.run(["curl", "-s", "ifconfig.me"], capture_output=True, text=True).stdout.strip()
-    if not ip:
-        ip = subprocess.run(["curl", "-s", "ip.sb"], capture_output=True, text=True).stdout.strip()
-
-# Auth: prefer API_KEY, fallback to email/password
-auth_token = ""
-if API_KEY:
-    auth_token = API_KEY
-    print("[register] Using API Key")
-elif EMAIL and PASSWORD:
-    resp = api_call("POST", "/admin/auth/login", {"email": EMAIL, "password": PASSWORD}, None)
-    auth_token = resp.get("data", {}).get("token", "")
-    if not auth_token:
-        print("[register] Login FAILED: " + str(resp))
-        sys.exit(1)
-    print("[register] Login OK")
-else:
-    print("[register] No API_KEY or credentials found")
+gw_token = r.stdout.strip()
+if not gw_token:
+    print(f'FAILED: {r.stderr[:200]}')
     sys.exit(1)
+print(f'[register] Token: {gw_token[:8]}...{gw_token[-4:]}')
 
-gw_url = "http://" + ip + ":18789"
-resp = api_call("POST", "/admin/agents", {
-    "openclawBaseUrl": gw_url,
-    "openclawGatewayUrl": gw_url,
-    "openclawGatewayToken": token,
-    "serverIp": ip,
-    "serverRegion": REGION,
-    "serverProvider": PROVIDER,
-    "skipConnectivityCheck": True
-}, auth_token)
+# 2. Register agent
+gw_url = f'http://{ip}:18789'
+print(f'[register] Registering {gw_url} ...')
+r = subprocess.run([
+    'curl', '-s', '-X', 'POST', f'{api}/admin/agents',
+    '-H', 'Content-Type: application/json',
+    '-H', f'Authorization: Bearer {api_key}',
+    '-d', json.dumps({
+        'openclawBaseUrl': gw_url, 'openclawGatewayUrl': gw_url,
+        'openclawGatewayToken': gw_token, 'serverIp': ip,
+        'serverProvider': provider, 'skipConnectivityCheck': True
+    })
+], capture_output=True, text=True, timeout=30)
 
-agent_id = resp.get("data", {}).get("id", 0)
+resp = json.loads(r.stdout)
+agent_id = resp.get('data', {}).get('id', 0)
 if agent_id:
-    code = resp["data"].get("code", "?")
-    print("[register] SUCCESS: agent #" + str(agent_id) + " (" + code + ")")
-elif "already" in str(resp.get("error", "")).lower():
-    print("[register] Already registered")
+    print(f'SUCCESS: Agent #{agent_id}')
 else:
-    print("[register] FAILED: " + str(resp))
-    sys.exit(1)
+    err = resp.get('error', '')
+    if 'already' in str(err).lower():
+        print('Already registered')
+    else:
+        print(f'FAILED: {r.stdout[:300]}')
+        sys.exit(1)
