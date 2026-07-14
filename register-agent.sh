@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IP="$1"
-API_KEY="$2"
+API_KEY="$1"
+PROVIDER="${2:-Tencent}"
 REGION="${3:-Singapore}"
-PROVIDER="${4:-Tencent}"
+IP="$4"
 API="${ADMIN_API:-https://www.nika8.com/api}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/agent01_tencent}"
 
-if [ -z "${IP:-}" ] || [ -z "${API_KEY:-}" ]; then
-  echo "用法: ./register-agent.sh <IP> <API_KEY> [REGION] [PROVIDER]"
+if [ -z "${API_KEY:-}" ] || [ -z "${IP:-}" ]; then
+  echo "用法: ./register-agent.sh <API_KEY> [PROVIDER] [REGION] <IP>"
   echo ""
   echo "获取 API Key: https://www.nika8.com/admin → API 密钥管理"
   exit 1
