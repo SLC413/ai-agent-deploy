@@ -1,69 +1,91 @@
 #!/usr/bin/env bash
-# ============================================================
-# register-agent.sh — 手动注册智能体到管理平台
-# 用法: ./register-agent.sh <服务器IP> <管理员邮箱> <管理员密码> [地区] [云商]
-# ============================================================
 set -euo pipefail
 
-IP="${1:?用法: ./register-agent.sh <IP> <EMAIL> <PASSWORD> [REGION] [PROVIDER]}"
-EMAIL="${2:?缺少管理员邮箱}"
-PASSWORD="${3:?缺少管理员密码}"
+IP="$1"
+EMAIL="$2"
+PASSWORD="$3"
 REGION="${4:-Singapore}"
 PROVIDER="${5:-Tencent}"
-ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
-CONFIG="${OPENCLAW_CONFIG:-$HOME/.openclaw/openclaw.json}"
+API="${ADMIN_API:-https://www.nika8.com/api}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/agent01_tencent}"
 
-if [ ! -f "$CONFIG" ]; then
-  echo "❌ 找不到 OpenClaw 配置: $CONFIG"
+if [ -z "${IP:-}" ] || [ -z "${EMAIL:-}" ] || [ -z "${PASSWORD:-}" ]; then
+  echo "用法: ./register-agent.sh <IP> <EMAIL> <PASSWORD> [REGION] [PROVIDER]"
+  echo "可选环境变量: SSH_KEY ADMIN_API"
   exit 1
 fi
 
-# 读取 Gateway Token
-TOKEN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['gateway']['auth']['token'])")
-echo "[register] Gateway Token: ${TOKEN:0:8}...${TOKEN: -4}"
+echo "[register] 读取 $IP 的 Gateway Token..."
 
-# 登录管理平台
-echo "[register] 登录 $ADMIN_API ..."
-LOGIN_RESP=$(curl -s -X POST "$ADMIN_API/auth/login" \
-  -H "Content-Type: application/json" \
-  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" 2>/dev/null)
+# 从远程 VPS 读取 Gateway Token
+TOKEN=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@"$IP" \
+  "python3 -c \"import json; print(json.load(open('\\\$HOME/.openclaw/openclaw.json'))['gateway']['auth']['token'])\"" 2>/dev/null)
 
-ADMIN_TOKEN=$(echo "$LOGIN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token',''))" 2>/dev/null)
-
-if [ -z "$ADMIN_TOKEN" ]; then
-  echo "❌ 登录失败: $LOGIN_RESP"
+if [ -z "$TOKEN" ]; then
+  echo "❌ 无法读取 Gateway Token，VPS 可能未部署 OpenClaw"
   exit 1
 fi
-echo "[register] 登录成功"
+echo "[register] Token: ${TOKEN:0:8}...${TOKEN: -4}"
 
-# 注册智能体
-GW_URL="http://${IP}:18789"
-echo "[register] 注册智能体: $GW_URL ..."
+# 用 Python 处理 JSON（避免 shell 转义问题）
+export REG_IP="$IP" REG_EMAIL="$EMAIL" REG_PASSWORD="$PASSWORD"
+export REG_REGION="$REGION" REG_PROVIDER="$PROVIDER" REG_API="$API"
+export REG_TOKEN="$TOKEN"
 
-REG_RESP=$(curl -s -X POST "$ADMIN_API/admin/agents" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d "{
-    \"openclawBaseUrl\": \"$GW_URL\",
-    \"openclawGatewayUrl\": \"$GW_URL\",
-    \"openclawGatewayToken\": \"$TOKEN\",
-    \"serverIp\": \"$IP\",
-    \"serverRegion\": \"$REGION\",
-    \"serverProvider\": \"$PROVIDER\",
-    \"skipConnectivityCheck\": true
-  }" 2>/dev/null)
+python3 << 'PYEOF'
+import json, subprocess, os
 
-AGENT_ID=$(echo "$REG_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('id',''))" 2>/dev/null)
+ip = os.environ['REG_IP']
+token = os.environ['REG_TOKEN']
+api = os.environ['REG_API']
+region = os.environ['REG_REGION']
+provider = os.environ['REG_PROVIDER']
 
-if [ -n "$AGENT_ID" ]; then
-  AGENT_CODE=$(echo "$REG_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('code',''))" 2>/dev/null)
-  echo "✅ 注册成功: Agent #$AGENT_ID ($AGENT_CODE)"
-else
-  ERROR_MSG=$(echo "$REG_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error','未知错误'))" 2>/dev/null)
-  if echo "$ERROR_MSG" | grep -qi 'already'; then
-    echo "⚠️  智能体已注册: $ERROR_MSG"
-  else
-    echo "❌ 注册失败: $REG_RESP"
-    exit 1
-  fi
-fi
+# Login
+print(f'[register] 登录 {api} ...')
+r = subprocess.run([
+    'curl', '-s', '-X', 'POST', f'{api}/auth/login',
+    '-H', 'Content-Type: application/json',
+    '-d', json.dumps({
+        'email': os.environ['REG_EMAIL'],
+        'password': os.environ['REG_PASSWORD']
+    })
+], capture_output=True, text=True, timeout=15)
+
+resp = json.loads(r.stdout)
+admin_token = resp.get('data', {}).get('token', '')
+if not admin_token:
+    print(f'❌ 登录失败: {r.stdout[:200]}')
+    exit(1)
+print('[register] 登录成功')
+
+# Register
+gw_url = f'http://{ip}:18789'
+print(f'[register] 注册 {gw_url} ...')
+r = subprocess.run([
+    'curl', '-s', '-X', 'POST', f'{api}/admin/agents',
+    '-H', 'Content-Type: application/json',
+    '-H', f'Authorization: Bearer {admin_token}',
+    '-d', json.dumps({
+        'openclawBaseUrl': gw_url,
+        'openclawGatewayUrl': gw_url,
+        'openclawGatewayToken': token,
+        'serverIp': ip,
+        'serverRegion': region,
+        'serverProvider': provider,
+        'skipConnectivityCheck': True
+    })
+], capture_output=True, text=True, timeout=30)
+
+resp = json.loads(r.stdout)
+agent_id = resp.get('data', {}).get('id', 0)
+if agent_id:
+    print(f'✅ 注册成功: Agent #{agent_id}')
+else:
+    err = resp.get('error', '')
+    if 'already' in str(err).lower():
+        print(f'⚠️  已注册')
+    else:
+        print(f'❌ 注册失败: {r.stdout[:200]}')
+        exit(1)
+PYEOF
