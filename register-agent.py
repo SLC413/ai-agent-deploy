@@ -2,8 +2,9 @@
 import json, sys, os, subprocess
 
 API = os.environ.get("ADMIN_API", "https://www.nika8.com/api")
-EMAIL = os.environ.get("ADMIN_EMAIL", "xhladmin@nika8.com")
+EMAIL = os.environ.get("ADMIN_EMAIL", "")
 PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+API_KEY = os.environ.get("ADMIN_API_KEY", "")
 REGION = os.environ.get("AGENT_REGION", "Unknown")
 PROVIDER = os.environ.get("AGENT_PROVIDER", "Tencent")
 CONFIG = os.environ.get("OPENCLAW_CONFIG", "/home/ubuntu/.openclaw/openclaw.json")
@@ -21,27 +22,32 @@ def api_call(method, path, data, token):
         return json.loads(r.stdout)
     return {"error": r.stderr.strip()}
 
-# Read gateway token
 cfg = json.load(open(CONFIG))
 token = cfg["gateway"]["auth"]["token"]
 print("[register] Token: " + token[:8] + "..." + token[-4:])
 
-# Get public IP
 ip = os.environ.get("PUBLIC_IP", "")
 if not ip:
     ip = subprocess.run(["curl", "-s", "ifconfig.me"], capture_output=True, text=True).stdout.strip()
     if not ip:
         ip = subprocess.run(["curl", "-s", "ip.sb"], capture_output=True, text=True).stdout.strip()
 
-# Login
-resp = api_call("POST", "/api/auth/login", {"email": EMAIL, "password": PASSWORD}, None)
-admin_token = resp.get("data", {}).get("token", "")
-if not admin_token:
-    print("[register] Login FAILED: " + str(resp))
+# Auth: prefer API_KEY, fallback to email/password
+auth_token = ""
+if API_KEY:
+    auth_token = API_KEY
+    print("[register] Using API Key")
+elif EMAIL and PASSWORD:
+    resp = api_call("POST", "/admin/auth/login", {"email": EMAIL, "password": PASSWORD}, None)
+    auth_token = resp.get("data", {}).get("token", "")
+    if not auth_token:
+        print("[register] Login FAILED: " + str(resp))
+        sys.exit(1)
+    print("[register] Login OK")
+else:
+    print("[register] No API_KEY or credentials found")
     sys.exit(1)
-print("[register] Login OK")
 
-# Register
 gw_url = "http://" + ip + ":18789"
 resp = api_call("POST", "/admin/agents", {
     "openclawBaseUrl": gw_url,
@@ -51,7 +57,7 @@ resp = api_call("POST", "/admin/agents", {
     "serverRegion": REGION,
     "serverProvider": PROVIDER,
     "skipConnectivityCheck": True
-}, admin_token)
+}, auth_token)
 
 agent_id = resp.get("data", {}).get("id", 0)
 if agent_id:

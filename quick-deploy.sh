@@ -1,33 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # ============================================================
-# quick-deploy.sh — 推送 systemd 服务 + 启动
-# 用法: ./quick-deploy.sh <IP> <SSH_KEY> <DEEPSEEK_KEY> [REGION]
-#
-# 环境变量（可选，有默认值）：
-#   DEPLOY_SERVER   - 部署文件托管地址（默认 http://43.160.245.20:9900）
-#   ADMIN_API       - 管理平台 API（默认 https://www.nika8.com/api）
-#   ADMIN_EMAIL     - 管理员邮箱（默认从环境变量读取）
-#   ADMIN_PASSWORD  - 管理员密码（默认从环境变量读取）
+# quick-deploy.sh — 推送部署服务到 VPS
+# 用法: ./quick-deploy.sh <SSH_KEY> <DEEPSEEK_KEY> <API_KEY> <IP> [REGION]
 # ============================================================
 
-IP="${1:?需要 IP}"
-SSH_KEY="${2:?需要 SSH_KEY}"
-DEEPSEEK_KEY="${3:?需要 DEEPSEEK_API_KEY}"
-REGION="${4:-Singapore}"
+SSH_KEY="${1:?需要 SSH_KEY}"
+DEEPSEEK_KEY="${2:?需要 DEEPSEEK_API_KEY}"
+API_KEY="***"
+IP="$4"
+REGION="${5:-Singapore}"
 
 DEPLOY_SERVER="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
-
-# 敏感信息必须从环境变量传入，不允许硬编码
-if [ -z "${ADMIN_EMAIL:-}" ]; then
-  echo "❌ 请设置环境变量 ADMIN_EMAIL"
-  exit 1
-fi
-if [ -z "${ADMIN_PASSWORD:-}" ]; then
-  echo "❌ 请设置环境变量 ADMIN_PASSWORD"
-  exit 1
-fi
 
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ubuntu@${IP}"
 
@@ -47,8 +32,7 @@ WorkingDirectory=/tmp
 
 Environment=DEPLOY_SERVER=${DEPLOY_SERVER}
 Environment=ADMIN_API=${ADMIN_API}
-Environment=ADMIN_EMAIL=${ADMIN_EMAIL}
-Environment=ADMIN_PASSWORD=${ADMIN_PASSWORD}
+Environment=ADMIN_API_KEY=***
 Environment=DEEPSEEK_API_KEY=${DEEPSEEK_KEY}
 Environment=AGENT_REGION=${REGION}
 Environment=AGENT_PROVIDER=Tencent

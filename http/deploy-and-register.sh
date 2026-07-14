@@ -4,9 +4,9 @@ log()  { echo "[$(date +%H:%M:%S)] $*"; }
 die()  { log "FATAL: $*"; exit 1; }
 
 DS="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
-API="${ADMIN_API:-https://ai.nika8.com/api}"
+API="${ADMIN_API:-https://www.nika8.com/api}"
 : "${DEEPSEEK_API_KEY:?need DEEPSEEK_API_KEY}"
-: "${ADMIN_PASSWORD:?need ADMIN_PASSWORD}"
+: "${ADMIN_API_KEY:?need ADMIN_API_KEY}"
 export CI=true
 
 IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ip.sb 2>/dev/null || echo unknown)
@@ -95,7 +95,7 @@ log "Config OK"
 
 # 9. Register
 log "Registering to hot pool..."
-python3 /tmp/register-agent.py 2>&1 && log "Register OK" || log "Register had issues (non-fatal)"
+python3 /tmp/register-agent.py --api-key 2>&1 && log "Register OK" || log "Register had issues (non-fatal)"
 
 # 10. Gateway
 log "Starting Gateway..."
