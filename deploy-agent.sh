@@ -18,7 +18,7 @@ SSH_KEY="${2:?缺少 SSH 私钥路径}"
 DEEPSEEK_KEY="${3:?缺少 DeepSeek API Key}"
 NAME="${4:-agent-${IP##*.}}"
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${IP}"
-BASELINE="/home/ubuntu/deploy/openclaw-baseline.tar.gz"
+BASELINE="/home/ubuntu/ai-agent-deploy/openclaw-baseline.tar.gz"
 SCRIPT_URL="https://raw.githubusercontent.com/BIDXOM/setup-openclaw-ubuntu/refs/heads/main/setup-openclaw-ubuntu.sh"
 
 echo -e "\n=========================================="
@@ -51,7 +51,7 @@ log "   已部署"
 # ═══ 2. INJECT .NPMRC (国内镜像加速) ═══
 log "2. 检测网络 + 优化..."
 NPM_LATENCY=$(${SSH} 'curl -s -o /dev/null -w "%{time_total}" --connect-timeout 5 https://registry.npmjs.org 2>/dev/null || echo 99')
-MATRIX_BIN="/home/ubuntu/deploy/binaries/matrix-sdk-crypto.linux-x64-gnu.node"
+MATRIX_BIN="/home/ubuntu/ai-agent-deploy/binaries/matrix-sdk-crypto.linux-x64-gnu.node"
 
 if [ "$(echo "${NPM_LATENCY} > 2" | bc -l 2>/dev/null || echo 0)" = "1" ] || [ "${NPM_LATENCY%%.*}" -ge 2 ]; then
   warn "   npmjs 延迟 ${NPM_LATENCY}s → 启用 npmmirror 镜像"
@@ -65,7 +65,7 @@ NPMRC'
     log "   matrix-sdk 二进制已预置(只读)"
   fi
   # 推送本地缓存的部署脚本
-  LOCAL_SCRIPT="/home/ubuntu/deploy/setup-openclaw-ubuntu.sh"
+  LOCAL_SCRIPT="/home/ubuntu/ai-agent-deploy/setup-openclaw-ubuntu.sh"
   if [ -f "${LOCAL_SCRIPT}" ]; then
     scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no "${LOCAL_SCRIPT}" ubuntu@${IP}:/tmp/setup-openclaw.sh 2>/dev/null || true
   fi
