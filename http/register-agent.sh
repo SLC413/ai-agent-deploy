@@ -40,7 +40,7 @@ echo "[register] 登录成功"
 GW_URL="http://${IP}:18789"
 echo "[register] 注册智能体: $GW_URL ..."
 
-REG_RESP=$(curl -s -X POST "$ADMIN_API/admin/agents" \
+REG_RESP=$(curl -s -X POST "$ADMIN_API/api/admin/agents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d "{

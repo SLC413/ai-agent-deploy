@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import json, sys, os, subprocess
 
-API = os.environ.get("ADMIN_API", "https://ai.nika8.com/api")
+API = os.environ.get("ADMIN_API", "https://www.nika8.com/api")
 EMAIL = os.environ.get("ADMIN_EMAIL", "xhladmin@nika8.com")
 PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 REGION = os.environ.get("AGENT_REGION", "Unknown")
@@ -34,7 +34,7 @@ if not ip:
         ip = subprocess.run(["curl", "-s", "ip.sb"], capture_output=True, text=True).stdout.strip()
 
 # Login
-resp = api_call("POST", "/admin/auth/login", {"email": EMAIL, "password": PASSWORD}, None)
+resp = api_call("POST", "/api/auth/login", {"email": EMAIL, "password": PASSWORD}, None)
 admin_token = resp.get("data", {}).get("token", "")
 if not admin_token:
     print("[register] Login FAILED: " + str(resp))

@@ -45,7 +45,7 @@ if [ -z "$ADMIN_TOKEN" ]; then
 fi
 
 # ── 3. 获取已注册智能体 IP 列表 ──
-REGISTERED_IPS=$(curl -s "$ADMIN_API/admin/agents?limit=200" \
+REGISTERED_IPS=$(curl -s "$ADMIN_API/api/admin/agents?limit=200" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | \
   python3 -c "import sys,json; [print(a.get('serverIp','')) for a in json.load(sys.stdin).get('data',[])]" 2>/dev/null)
 
@@ -140,7 +140,7 @@ for i, record in enumerate(tracker):
     })
     
     curl_cmd = ['curl', '-s', '-X', 'POST',
-                f'{os.environ["ADMIN_API"]}/admin/agents',
+                f'{os.environ["ADMIN_API"]}/api/admin/agents',
                 '-H', 'Content-Type: application/json',
                 '-H', f'Authorization: Bearer {os.environ["ADMIN_TOKEN"]}',
                 '-d', reg_payload]
