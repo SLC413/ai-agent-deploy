@@ -1,0 +1,30 @@
+[Unit]
+Description=OpenClaw Agent Auto-Deploy + HotPool Register
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+Environment=DEPLOY_SERVER=http://43.160.245.20:9900
+Environment=ADMIN_API=https://ai.nika8.com/api
+Environment=ADMIN_EMAIL=xhladmin@nika8.com
+Environment=ADMIN_PASSWORD=${ADMIN_PASSWORD}
+
+# ↓ 部署时填入 ↓
+Environment=DEEPSEEK_API_KEY=***
+Environment=AGENT_REGION=Singapore
+Environment=AGENT_PROVIDER=Tencent
+
+ExecStart=/bin/bash -c ' \
+  curl -sL ${DEPLOY_SERVER}/deploy-and-register.sh -o /tmp/deploy-and-register.sh && \
+  curl -sL ${DEPLOY_SERVER}/register-agent.py -o /tmp/register-agent.py && \
+  bash /tmp/deploy-and-register.sh'
+
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

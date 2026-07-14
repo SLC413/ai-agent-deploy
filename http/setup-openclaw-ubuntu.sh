@@ -1,0 +1,1 @@
+../setup-openclaw-ubuntu.sh
