@@ -152,6 +152,8 @@ S=~/.config/systemd/user/openclaw-gateway.service
 if [ -f "$S" ] && ! grep -q '^Environment=DEEPSEEK_API_KEY=' "$S" 2>/dev/null; then
   # append 文本不受 sed 分隔符影响；key 含换行会坏，DeepSeek key 通常无此问题
   sed -i "/^\[Service\]/a Environment=DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}" "$S"
+  sed -i "/^\[Service\]/a Environment=OPENAI_API_KEY=${DEEPSEEK_API_KEY}" "$S"
+  sed -i "/^\[Service\]/a Environment=OPENAI_BASE_URL=https://api.deepseek.com" "$S"
 fi
 rm -f ~/.openclaw/state/openclaw.sqlite* 2>/dev/null
 sudo loginctl enable-linger ubuntu 2>/dev/null || true

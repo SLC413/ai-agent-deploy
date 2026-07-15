@@ -108,6 +108,8 @@ fi
 # API Key
 if [ -f "$S" ]; then
   sed -i "/^\[Service\]/a Environment=DEEPSEEK_API_KEY='"${DEEPSEEK_KEY}"'" "$S" 2>/dev/null || true
+  sed -i "/^\[Service\]/a Environment=OPENAI_API_KEY='"${DEEPSEEK_KEY}"'" "$S" 2>/dev/null || true
+  sed -i "/^\[Service\]/a Environment=OPENAI_BASE_URL=https://api.deepseek.com" "$S" 2>/dev/null || true
 fi
 
 # 创建 openclaw wrapper
