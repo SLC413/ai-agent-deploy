@@ -17,7 +17,19 @@ SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ubuntu@${IP}"
 
 [ -f "${SSH_KEY}" ] || { echo "❌ SSH_KEY 不存在: ${SSH_KEY}"; exit 1; }
 
-echo "Pushing deploy service to ${IP}..."
+echo "=========================================="
+echo " quick-deploy"
+echo "  IP:            ${IP}"
+echo "  DEPLOY_SERVER: ${DEPLOY_SERVER}"
+echo "  ADMIN_API:     ${ADMIN_API}"
+echo "  PROVIDER:      ${AGENT_PROVIDER}"
+echo "  SSH_KEY:       ${SSH_KEY}"
+echo "=========================================="
+
+echo "[1/4] SSH 连通性检查..."
+${SSH} 'echo OK $(hostname) $(whoami)' || { echo "❌ SSH 失败"; exit 1; }
+
+echo "[2/4] 写入并启动 deploy-agent.service ..."
 
 cat > /tmp/deploy-${IP}.service << EOF
 [Unit]
@@ -48,9 +60,13 @@ WantedBy=multi-user.target
 EOF
 
 scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no /tmp/deploy-${IP}.service ubuntu@${IP}:/tmp/deploy-agent.service
-${SSH} 'sudo mv /tmp/deploy-agent.service /etc/systemd/system/deploy-agent.service && sudo systemctl daemon-reload && sudo systemctl start deploy-agent.service'
-rm /tmp/deploy-${IP}.service
+${SSH} 'sudo mv /tmp/deploy-agent.service /etc/systemd/system/deploy-agent.service && sudo systemctl daemon-reload && sudo systemctl reset-failed deploy-agent.service 2>/dev/null; sudo systemctl start deploy-agent.service'
+rm -f /tmp/deploy-${IP}.service
 
+echo "[3/4] 确认服务已进入 active/activating..."
+${SSH} 'systemctl is-active deploy-agent.service; systemctl status deploy-agent.service --no-pager -l | head -20' || true
+
+echo "[4/4] 跟踪记录"
 echo ""
 echo "✅ 已启动 — 服务会自动完成部署+注册"
 echo "查看日志: ssh -i ${SSH_KEY} ubuntu@${IP} 'sudo journalctl -u deploy-agent -f'"

@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 log()  { echo "[$(date +%H:%M:%S)] $*"; }
-die()  { log "FATAL: $*"; exit 1; }
+die()  {
+  log "FATAL: $*"
+  if [ -f /tmp/deploy-step.log ]; then
+    log "--- last deploy-step.log (tail 80) ---"
+    tail -80 /tmp/deploy-step.log || true
+  fi
+  exit 1
+}
+step() { log "======== $* ========"; }
 
 DS="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 export ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
@@ -10,53 +19,108 @@ export ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
 export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 export CI=true
 
-IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ip.sb 2>/dev/null || echo unknown)
-log "Start deploy - IP: ${IP}"
+IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null \
+  || curl -s --connect-timeout 5 ip.sb 2>/dev/null \
+  || echo unknown)
+step "START deploy"
+log "Public IP: ${IP}"
+log "DEPLOY_SERVER: ${DS}"
+log "ADMIN_API: ${ADMIN_API}"
+log "AGENT_PROVIDER: ${AGENT_PROVIDER}"
+log "DEEPSEEK_API_KEY set: $([ -n "${DEEPSEEK_API_KEY}" ] && echo yes || echo no) (len=${#DEEPSEEK_API_KEY})"
+log "ADMIN_API_KEY set: $([ -n "${ADMIN_API_KEY}" ] && echo yes || echo no) (len=${#ADMIN_API_KEY})"
 
 # 1. Baseline
-log "Downloading baseline..."
-sudo rm -rf /home/ubuntu/openclaw /home/ubuntu/.openclaw 2>/dev/null
+step "1/10 Download baseline"
+sudo rm -rf /home/ubuntu/openclaw /home/ubuntu/.openclaw 2>/dev/null || true
 sudo mkdir -p /home/ubuntu/openclaw
-curl -sL "${DS}/openclaw-baseline.tar.gz" | sudo tar xzf - -C /home/ubuntu/openclaw
+log "curl ${DS}/openclaw-baseline.tar.gz ..."
+if ! curl -fL --connect-timeout 30 --max-time 600 "${DS}/openclaw-baseline.tar.gz" \
+  | sudo tar xzf - -C /home/ubuntu/openclaw; then
+  die "baseline download/extract failed from ${DS}/openclaw-baseline.tar.gz"
+fi
 sudo chown -R ubuntu:ubuntu /home/ubuntu/openclaw
-ls /home/ubuntu/openclaw/package.json || die "baseline failed"
+[ -f /home/ubuntu/openclaw/package.json ] || die "baseline missing package.json"
+log "baseline OK: $(du -sh /home/ubuntu/openclaw | awk '{print $1}')"
+log "dist present: $([ -f /home/ubuntu/openclaw/dist/index.js ] && echo yes || echo NO)"
+python3 -c "import json; print('package.json name/version:', json.load(open('/home/ubuntu/openclaw/package.json')).get('name'), json.load(open('/home/ubuntu/openclaw/package.json')).get('version'))" 2>/dev/null || true
 
 # 2. System deps
-log "System deps..."
-sudo apt-get update -qq 2>/dev/null
-sudo apt-get install -y -qq curl git ca-certificates gnupg unzip python3 jq build-essential >/dev/null 2>&1
+step "2/10 System deps"
+sudo apt-get update -qq 2>/dev/null || log "WARN: apt-get update failed (continuing)"
+sudo apt-get install -y -qq curl git ca-certificates gnupg unzip python3 jq build-essential \
+  >/tmp/deploy-step.log 2>&1 || die "apt-get install failed"
 log "Deps OK"
 
 # 3. Swap
-if [ ! -f /swapfile ]; then sudo fallocate -l 12G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile; fi
-
-# 4. Node
-log "Node..." 
-if ! command -v node >/dev/null 2>&1; then
-  curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - >/dev/null 2>&1
-  sudo apt-get install -y -qq nodejs >/dev/null 2>&1
+step "3/10 Swap"
+if [ -f /swapfile ] || swapon --show 2>/dev/null | grep -q /swapfile; then
+  log "swap already present"
+  free -h | head -2 || true
+else
+  log "creating 12G swapfile..."
+  sudo fallocate -l 12G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  log "swap enabled"
+  free -h | head -2 || true
 fi
-npm install -g pnpm@latest >/dev/null 2>&1 || sudo npm install -g pnpm@latest >/dev/null 2>&1
-export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"
-log "Node $(node --version)"
 
-# 5. China check
+# 4. Node + pnpm
+step "4/10 Node + pnpm"
+if ! command -v node >/dev/null 2>&1; then
+  log "installing Node 24..."
+  curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - >/tmp/deploy-step.log 2>&1 \
+    || die "nodesource setup failed"
+  sudo apt-get install -y -qq nodejs >/tmp/deploy-step.log 2>&1 || die "nodejs install failed"
+fi
+log "Node $(node --version) npm $(npm --version)"
+
+# 用户态 pnpm，避免全局权限问题
+mkdir -p "$HOME/.npm-global" "$HOME/.local/bin" "$HOME/.local/share/pnpm/bin"
+npm config set prefix "$HOME/.npm-global" >/dev/null 2>&1 || true
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"
+if ! command -v pnpm >/dev/null 2>&1; then
+  log "installing pnpm..."
+  npm install -g pnpm@latest >/tmp/deploy-step.log 2>&1 \
+    || sudo npm install -g pnpm@latest >/tmp/deploy-step.log 2>&1 \
+    || die "pnpm install failed"
+fi
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"
+log "pnpm $(pnpm --version 2>/dev/null || echo MISSING)"
+command -v pnpm >/dev/null 2>&1 || die "pnpm not on PATH after install"
+
+# 5. China mirror
+step "5/10 Network / mirror"
 LATENCY=$(curl -s -o /dev/null -w "%{time_total}" --connect-timeout 5 https://registry.npmjs.org 2>/dev/null || echo 99)
-if [ "${LATENCY%%.*}" -ge 2 ]; then
-  log "China network - using mirror"
+log "npmjs latency: ${LATENCY}s"
+cd /home/ubuntu/openclaw
+if [ "${LATENCY%%.*}" -ge 2 ] 2>/dev/null; then
+  log "China network - enabling npmmirror"
   echo "registry=https://registry.npmmirror.com" > /home/ubuntu/openclaw/.npmrc
   mkdir -p /home/ubuntu/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs
-  curl -sL "${DS}/matrix-sdk-crypto.linux-x64-gnu.node" -o /home/ubuntu/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs/matrix-sdk-crypto.linux-x64-gnu.node 2>/dev/null || true
+  if curl -fL --connect-timeout 20 --max-time 120 \
+    "${DS}/matrix-sdk-crypto.linux-x64-gnu.node" \
+    -o /home/ubuntu/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs/matrix-sdk-crypto.linux-x64-gnu.node \
+    >/tmp/deploy-step.log 2>&1; then
+    log "matrix-sdk binary preloaded"
+  else
+    log "WARN: matrix-sdk binary download failed (non-fatal)"
+  fi
+else
+  log "npmjs OK, no mirror"
+  : > /home/ubuntu/openclaw/.npmrc
 fi
 
-cd /home/ubuntu/openclaw
-echo "pnpm.allowUnusedPatches=true" >> .npmrc
-git init 2>/dev/null || true && git remote add origin 2>/dev/null || true https://github.com/openclaw/openclaw.git 2>/dev/null || true
-git config --global --add safe.directory /home/ubuntu/openclaw 2>/dev/null || true
+# 6. Git + patch package.json
+step "6/10 Prepare package.json / git"
+git init >/dev/null 2>&1 || true
+git remote remove origin >/dev/null 2>&1 || true
+git remote add origin https://github.com/openclaw/openclaw.git >/dev/null 2>&1 || true
+git config --global --add safe.directory /home/ubuntu/openclaw >/dev/null 2>&1 || true
+log "git remotes: $(git remote -v 2>/dev/null | tr '\n' ' ' || echo none)"
 
-# Install dependencies (package.json already patched for pnpm v11)
-
-# baseline 常带过期 patchedDependencies → ERR_PNPM_UNUSED_PATCH
 python3 << 'PY'
 import json
 from pathlib import Path
@@ -65,38 +129,52 @@ cfg = json.loads(p.read_text())
 pnpm_cfg = cfg.setdefault("pnpm", {})
 pnpm_cfg["allowUnusedPatches"] = True
 pnpm_cfg["allowNonAppliedPatches"] = True
-# 直接清空 patchedDependencies，避免版本漂移再踩 ERR_PNPM_UNUSED_PATCH
 patched = pnpm_cfg.get("patchedDependencies") or {}
 if patched:
-    print(f"cleared {len(patched)} patchedDependencies entries")
+    print(f"[patch] cleared {len(patched)} patchedDependencies entries")
     pnpm_cfg["patchedDependencies"] = {}
+else:
+    print("[patch] no patchedDependencies to clear")
 p.write_text(json.dumps(cfg, indent=2) + "\n")
-print("pnpm.allowUnusedPatches=true")
+print("[patch] allowUnusedPatches=true written")
 PY
 
-# 6. Setup (baseline pre-built, skip pnpm onboarding)
-log "Setup (baseline v2026.6.11 pre-built, includes pnpm install)..."
+# 7. pnpm install
+step "7/10 pnpm install"
 cd /home/ubuntu/openclaw
-git init 2>/dev/null || true
-git remote add origin 2>/dev/null || true https://github.com/openclaw/openclaw.git 2>/dev/null
-git config --global --add safe.directory /home/ubuntu/openclaw 2>/dev/null
+rm -f npm-shrinkwrap.json
+# 保留 pnpm-lock.yaml 若存在，仅在 install 失败时再删重试
+log "running: pnpm install (full log -> /tmp/pnpm-install.log)"
+set +e
+pnpm install > /tmp/pnpm-install.log 2>&1
+PNPM_RC=$?
+set -e
+tail -30 /tmp/pnpm-install.log || true
+if [ "$PNPM_RC" -ne 0 ] || [ ! -d node_modules ]; then
+  log "WARN: pnpm install failed (rc=${PNPM_RC}), retry without lockfile..."
+  rm -f pnpm-lock.yaml npm-shrinkwrap.json
+  set +e
+  pnpm install > /tmp/pnpm-install.log 2>&1
+  PNPM_RC=$?
+  set -e
+  tail -30 /tmp/pnpm-install.log || true
+fi
+[ "$PNPM_RC" -eq 0 ] || die "pnpm install failed rc=${PNPM_RC}, see /tmp/pnpm-install.log"
+[ -d node_modules ] || die "node_modules missing after pnpm install"
+[ -f dist/index.js ] || die "dist/index.js missing — baseline 不完整，无法启动 gateway"
+log "pnpm install OK; node_modules=$(du -sh node_modules 2>/dev/null | awk '{print $1}')"
 
-# Install dependencies (package.json already patched for pnpm v11)
-log "  pnpm install (may take 1-2 minutes)..."
-rm -f npm-shrinkwrap.json pnpm-lock.yaml  # remove npm lockfile with stale patch refs
-pnpm install 2>&1 | tail -5
-[ -d node_modules ] || die "pnpm install failed"
-log "  pnpm install OK"
-
-# Generate gateway config
-mkdir -p /home/ubuntu/.openclaw
-TOKEN=$(python3 -c "import secrets;print(secrets.token_hex(32))")
+# 8. Write openclaw.json + systemd unit
+step "8/10 Write config + systemd unit"
+mkdir -p /home/ubuntu/.openclaw ~/.config/systemd/user ~/.local/bin
+TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 cat > /home/ubuntu/.openclaw/openclaw.json << JSONEOF
 {
   "gateway": {
     "mode": "local",
     "port": 18789,
-    "auth": { "token": "$TOKEN" },
+    "bind": "lan",
+    "auth": { "mode": "token", "token": "${TOKEN}" },
     "http": { "endpoints": { "chatCompletions": { "enabled": true } } }
   },
   "plugins": { "entries": { "admin-http-rpc": { "enabled": true } } },
@@ -105,16 +183,17 @@ cat > /home/ubuntu/.openclaw/openclaw.json << JSONEOF
   "wizard": { "lastRunVersion": "2026.6.11" }
 }
 JSONEOF
+log "openclaw.json written; token=${TOKEN:0:8}...${TOKEN: -4}"
 
-# Create systemd service
-mkdir -p ~/.config/systemd/user
 cat > ~/.config/systemd/user/openclaw-gateway.service << UNITEOF
 [Unit]
 Description=OpenClaw Gateway (v2026.6.11)
 After=network-online.target
 Wants=network-online.target
+
 [Service]
 Type=simple
+WorkingDirectory=/home/ubuntu/openclaw
 ExecStart=/usr/bin/node /home/ubuntu/openclaw/dist/index.js gateway --port 18789
 Restart=always
 RestartSec=5
@@ -124,47 +203,88 @@ Environment=TMPDIR=/tmp
 Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/ubuntu/.npm-global/bin:/home/ubuntu/.local/share/pnpm/bin:/home/ubuntu/.local/bin
 Environment=OPENCLAW_GATEWAY_PORT=18789
 Environment=OPENCLAW_SYSTEMD_UNIT=openclaw-gateway.service
+Environment=DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+Environment=OPENAI_API_KEY=${DEEPSEEK_API_KEY}
+Environment=OPENAI_BASE_URL=https://api.deepseek.com
+Environment=OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1
+
 [Install]
 WantedBy=default.target
 UNITEOF
+log "systemd unit written: ~/.config/systemd/user/openclaw-gateway.service"
 
-[ -f /home/ubuntu/.openclaw/openclaw.json ] || die "Failed to create openclaw.json"
-log "Setup done"
+grep -q npm-global ~/.bashrc 2>/dev/null \
+  || echo 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"' >> ~/.bashrc
 
-# user systemd needs these when launched from a system unit
+# 9. Start gateway
+step "9/10 Start Gateway"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
+log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
+log "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
 
-# Gateway already configured in JSON
-
-# Config (minimal)
-log "Config..."
-grep -q npm-global ~/.bashrc 2>/dev/null || echo "export PATH=\"\$HOME/.local/bin:\$HOME/.npm-global/bin:\$PATH\"" >> ~/.bashrc
-log "Config OK"
-
-# 9. Gateway（先启动，再注册）
-log "Starting Gateway..."
-# 确保 DEEPSEEK key 写入 user systemd 服务（避免 sed 分隔符冲突，用 |）
-S=~/.config/systemd/user/openclaw-gateway.service
-if [ -f "$S" ] && ! grep -q '^Environment=DEEPSEEK_API_KEY=' "$S" 2>/dev/null; then
-  # append 文本不受 sed 分隔符影响；key 含换行会坏，DeepSeek key 通常无此问题
-  sed -i "/^\[Service\]/a Environment=DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}" "$S"
-  sed -i "/^\[Service\]/a Environment=OPENAI_API_KEY=${DEEPSEEK_API_KEY}" "$S"
-  sed -i "/^\[Service\]/a Environment=OPENAI_BASE_URL=https://api.deepseek.com" "$S"
+if [ ! -d "${XDG_RUNTIME_DIR}" ]; then
+  log "WARN: ${XDG_RUNTIME_DIR} missing — enabling linger and waiting"
 fi
-rm -f ~/.openclaw/state/openclaw.sqlite* 2>/dev/null
-sudo loginctl enable-linger ubuntu 2>/dev/null || true
-systemctl --user daemon-reload 2>/dev/null || true
+sudo loginctl enable-linger ubuntu 2>/dev/null || log "WARN: enable-linger failed"
+# linger 后有时需要等 runtime 目录出现
+for i in 1 2 3 4 5; do
+  if [ -d "${XDG_RUNTIME_DIR}" ]; then break; fi
+  log "waiting for ${XDG_RUNTIME_DIR} (${i}/5)..."
+  sleep 2
+done
+[ -d "${XDG_RUNTIME_DIR}" ] || die "XDG_RUNTIME_DIR still missing; cannot start user systemd"
+
+systemctl --user daemon-reload
 systemctl --user reset-failed openclaw-gateway 2>/dev/null || true
-systemctl --user start openclaw-gateway 2>/dev/null || true
-sleep 20
-HEALTH=$(curl -s -m 5 http://127.0.0.1:18789/health 2>/dev/null || echo "FAIL")
-echo "$HEALTH" | grep -q "ok.*true" && log "Gateway LIVE" || log "Gateway: ${HEALTH}"
+systemctl --user enable openclaw-gateway 2>/dev/null || true
+log "starting openclaw-gateway..."
+systemctl --user start openclaw-gateway || {
+  log "systemctl --user start failed"
+  systemctl --user status openclaw-gateway --no-pager -l || true
+  journalctl --user -u openclaw-gateway -n 50 --no-pager || true
+  die "failed to start openclaw-gateway"
+}
+
+HEALTH="FAIL"
+for i in 1 2 3 4 5 6; do
+  sleep 5
+  HEALTH=$(curl -s -m 5 http://127.0.0.1:18789/health 2>/dev/null || echo "FAIL")
+  log "health check ${i}/6: ${HEALTH}"
+  if echo "$HEALTH" | grep -q '"ok":true\|"ok"[[:space:]]*:[[:space:]]*true\|ok.*true'; then
+    break
+  fi
+done
+
+if ! echo "$HEALTH" | grep -qi 'ok.*true'; then
+  log "Gateway NOT healthy"
+  systemctl --user status openclaw-gateway --no-pager -l || true
+  journalctl --user -u openclaw-gateway -n 80 --no-pager || true
+  die "Gateway health failed: ${HEALTH}"
+fi
+log "Gateway LIVE"
 
 # 10. Register
-log "Registering to hot pool..."
-PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ip.sb 2>/dev/null || echo "${IP}")
-python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$PUBLIC_IP" "$AGENT_PROVIDER" 2>&1 \
-  && log "Register OK" || log "Register had issues (non-fatal)"
+step "10/10 Register to hot pool"
+PUBLIC_IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null \
+  || curl -s --connect-timeout 5 ip.sb 2>/dev/null \
+  || echo "${IP}")
+log "register IP=${PUBLIC_IP} provider=${AGENT_PROVIDER} api=${ADMIN_API}"
+if [ ! -f /tmp/register-agent.py ]; then
+  log "register-agent.py missing in /tmp, downloading..."
+  curl -fL "${DS}/register-agent.py" -o /tmp/register-agent.py || die "cannot download register-agent.py"
+fi
+set +e
+REGISTER_LOCAL=1 python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$PUBLIC_IP" "$AGENT_PROVIDER"
+REG_RC=$?
+set -e
+if [ "$REG_RC" -eq 0 ]; then
+  log "Register OK"
+else
+  log "Register failed (rc=${REG_RC}) — non-fatal; patrol can retry later"
+fi
 
-log "=== DEPLOY COMPLETE ==="
+step "DEPLOY COMPLETE"
+log "Gateway: http://${PUBLIC_IP}:18789"
+log "Token:   ${TOKEN:0:8}...${TOKEN: -4}"
+log "Health:  ${HEALTH}"
