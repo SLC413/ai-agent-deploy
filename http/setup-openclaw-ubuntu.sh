@@ -80,22 +80,26 @@ fi
 
 echo ""
 echo "==> 3. 更新系统并安装基础依赖"
-sudo apt update
-sudo apt upgrade -y
+if [ "${OPENCLAW_SKIP_SYSTEM:-0}" = "1" ]; then
+  echo "OPENCLAW_SKIP_SYSTEM=1，跳过 apt update/upgrade（由 deploy-and-register 预装）"
+else
+  sudo apt update
+  sudo apt upgrade -y
 
-sudo apt install -y \
-  curl \
-  git \
-  ca-certificates \
-  gnupg \
-  build-essential \
-  unzip \
-  python3 \
-  python3-pip \
-  jq \
-  nano \
-  htop \
-  lsof
+  sudo apt install -y \
+    curl \
+    git \
+    ca-certificates \
+    gnupg \
+    build-essential \
+    unzip \
+    python3 \
+    python3-pip \
+    jq \
+    nano \
+    htop \
+    lsof
+fi
 
 echo ""
 echo "==> 4. 配置 swap，避免源码构建内存不足"
@@ -118,8 +122,12 @@ free -h
 
 echo ""
 echo "==> 5. 安装 Node.js 24"
-curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
-sudo apt install -y nodejs
+if [ "${OPENCLAW_SKIP_SYSTEM:-0}" = "1" ] && command -v node >/dev/null 2>&1; then
+  echo "OPENCLAW_SKIP_SYSTEM=1，跳过 Node 重装: $(node -v)"
+else
+  curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+  sudo apt install -y nodejs
+fi
 
 echo "Node 版本:"
 node -v
@@ -194,11 +202,10 @@ cd "$INSTALL_DIR"
 echo ""
 echo "==> 10. 保持当前仓库默认分支"
 
-echo "当前分支:"
-git branch --show-current
-
+# baseline + git init 的空仓库没有 commit，--show-current 会非 0，不能让 set -e 中断
+echo "当前分支: $(git branch --show-current 2>/dev/null || echo '(none)')"
 echo "当前 remote:"
-git remote -v
+git remote -v 2>/dev/null || true
 
 echo ""
 echo "==> 11. 安装依赖"
@@ -215,12 +222,9 @@ pnpm_cfg = cfg.setdefault("pnpm", {})
 pnpm_cfg["allowUnusedPatches"] = True
 pnpm_cfg["allowNonAppliedPatches"] = True
 patched = pnpm_cfg.get("patchedDependencies") or {}
-drop = [k for k in list(patched) if "claude-agent-acp" in k]
-for k in drop:
-    patched.pop(k, None)
-    print(f"  removed unused patch: {k}")
-if drop:
-    pnpm_cfg["patchedDependencies"] = patched
+if patched:
+    print(f"  cleared {len(patched)} patchedDependencies entries")
+    pnpm_cfg["patchedDependencies"] = {}
 p.write_text(json.dumps(cfg, indent=2) + "\n")
 print("  pnpm.allowUnusedPatches=true")
 PY

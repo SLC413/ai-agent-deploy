@@ -62,14 +62,11 @@ cfg = json.loads(p.read_text())
 pnpm_cfg = cfg.setdefault("pnpm", {})
 pnpm_cfg["allowUnusedPatches"] = True
 pnpm_cfg["allowNonAppliedPatches"] = True
-# 直接删掉已知会踩坑的过期 patch（更稳）
+# 直接清空 patchedDependencies，避免版本漂移再踩 ERR_PNPM_UNUSED_PATCH
 patched = pnpm_cfg.get("patchedDependencies") or {}
-drop = [k for k in list(patched) if "claude-agent-acp" in k]
-for k in drop:
-    patched.pop(k, None)
-    print(f"removed unused patch: {k}")
-if drop:
-    pnpm_cfg["patchedDependencies"] = patched
+if patched:
+    print(f"cleared {len(patched)} patchedDependencies entries")
+    pnpm_cfg["patchedDependencies"] = {}
 p.write_text(json.dumps(cfg, indent=2) + "\n")
 print("pnpm.allowUnusedPatches=true")
 PY
@@ -78,10 +75,10 @@ PY
 log "Onboarding (takes several minutes)..."
 curl -sL "${DS}/setup-openclaw-ubuntu.sh" -o /tmp/setup.sh 2>/dev/null || true
 if [ -f /tmp/setup.sh ] && [ -s /tmp/setup.sh ]; then
-  DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}" bash /tmp/setup.sh > /tmp/onboard.log 2>&1 &
+  OPENCLAW_SKIP_SYSTEM=1 DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}" bash /tmp/setup.sh > /tmp/onboard.log 2>&1 &
 else
   log "setup script missing from DEPLOY_SERVER, fallback to GitHub"
-  curl -sL https://raw.githubusercontent.com/BIDXOM/setup-openclaw-ubuntu/refs/heads/main/setup-openclaw-ubuntu.sh | DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}" bash > /tmp/onboard.log 2>&1 &
+  curl -sL https://raw.githubusercontent.com/BIDXOM/setup-openclaw-ubuntu/refs/heads/main/setup-openclaw-ubuntu.sh | OPENCLAW_SKIP_SYSTEM=1 DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}" bash > /tmp/onboard.log 2>&1 &
 fi
 OPID=$!
 while kill -0 $OPID 2>/dev/null; do sleep 15; done
@@ -89,7 +86,7 @@ wait $OPID
 ONBOARD_RC=$?
 pkill -f "openclaw onboard" 2>/dev/null || true
 sleep 3
-tail -30 /tmp/onboard.log || true
+tail -50 /tmp/onboard.log || true
 [ "$ONBOARD_RC" -eq 0 ] || die "Onboarding failed (exit ${ONBOARD_RC}), see /tmp/onboard.log"
 [ -f /home/ubuntu/.openclaw/openclaw.json ] || die "缺少 ~/.openclaw/openclaw.json，onboard 未完成"
 log "Onboarding done"
