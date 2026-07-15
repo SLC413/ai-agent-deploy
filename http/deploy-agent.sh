@@ -5,7 +5,7 @@ set -euo pipefail
 # OpenClaw Agent 一键部署 v3
 # 用法: ./deploy-agent.sh <IP> <SSH_KEY> <DEEPSEEK_API_KEY> [NAME]
 #
-# 策略: 轻量基线(69MB) → Onboarding → 重建dist → 修配置 → 启动
+# 策略: 基线(v2026.6.11, 预构建) → Onboarding → 修配置 → 初始化 → 启动
 # ============================================================
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -90,17 +90,8 @@ ${SSH} 'pkill -f "openclaw onboard" 2>/dev/null' || true
 sleep 2
 log "   Onboarding 完成"
 
-# ═══ 4. REBUILD DIST (修复版本匹配) ═══
-log "4. 重建 dist (匹配本地依赖)..."
-${SSH} '
-  cd ~/openclaw && rm -rf dist
-  CI=true node scripts/run-node.mjs --version 2>&1 | tail -3
-  ls dist/index.js
-'
-log "   dist 已重建 ✅"
-
-# ═══ 5. FIX CONFIG ═══
-log "5. 修复配置..."
+# ═══ 4. FIX CONFIG ═══
+log "4. 修复配置..."
 ${SSH} '
 # pnpm
 [ ! -f ~/.local/share/pnpm/bin/pnpm ] && ln -sf ~/.npm-global/bin/pnpm ~/.local/share/pnpm/bin/pnpm
@@ -134,36 +125,18 @@ echo "export PATH=\"\$PNPM_HOME:\$PATH\"" >> ~/.bashrc
 '
 log "   已修复"
 
-# ═══ 5.5 INIT GATEWAY (lock version + disable reasoning + enable endpoints) ═══
-log "5.5 初始化 Gateway (禁用 reasoning + 启用 API 端点)..."
+# ═══ 5. INIT GATEWAY (disable reasoning + enable endpoints) ═══
+log "5. 初始化 Gateway (禁用 reasoning + 启用 API 端点)..."
 ${SSH} '
-# 0. 降级到稳定版 v2026.6.11（v2026.7.2 有流式聊天 draining bug）
-log "   安装 openclaw@2026.6.11（稳定版）..."
-npm install -g openclaw@2026.6.11 2>/dev/null || true
-
-# 切换 systemd 使用 npm 全局版本
-NPM_DIST="${HOME}/.npm-global/lib/node_modules/openclaw/dist/index.js"
-if [ -f "$NPM_DIST" ]; then
-  mkdir -p ~/.config/systemd/user/openclaw-gateway.service.d
-  cat > ~/.config/systemd/user/openclaw-gateway.service.d/exec.conf << UNIT
-[Service]
-ExecStart=
-ExecStart=/usr/bin/node ${NPM_DIST} gateway --port 18789
-Environment=OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1
-UNIT
-  systemctl --user daemon-reload
-  log "   systemd 已切换到 v2026.6.11"
-fi
-
-# 1. 禁用 DeepSeek V4 reasoning/thinking（防止只返回思考内容不给答案）
+# 禁用 DeepSeek V4 reasoning/thinking
 cd ~/openclaw
 ~/.npm-global/bin/pnpm openclaw config set agents.defaults.reasoningDefault off 2>/dev/null || true
 ~/.npm-global/bin/pnpm openclaw config set agents.defaults.thinkingDefault off 2>/dev/null || true
 
-# 2. 启用 admin-http-rpc 插件（平台管理接口）
+# 启用 admin-http-rpc 插件
 ~/.npm-global/bin/pnpm openclaw plugins enable admin-http-rpc 2>/dev/null || true
 
-# 3. 启用 OpenAI 兼容 Chat Completions API（供平台代理转发）
+# 启用 OpenAI Chat Completions API
 ~/.npm-global/bin/pnpm openclaw config patch --raw """{
   "gateway": {
     "http": {
@@ -176,7 +149,7 @@ cd ~/openclaw
   }
 }""" 2>/dev/null || true
 
-# 4. 锁定 meta 版本标记为 v2026.6.11
+# 锁定 meta 版本
 python3 << """PYEOF"""
 import json, os
 cfg_path = os.path.expanduser("~/.openclaw/openclaw.json")
@@ -189,7 +162,7 @@ if os.path.exists(cfg_path):
         json.dump(cfg, f, indent=2)
 PYEOF
 
-log "   Gateway 初始化完成 ✅"
+log "   初始化完成 ✅"
 '
 
 # ═══ 6. CLEAN & START ═══
