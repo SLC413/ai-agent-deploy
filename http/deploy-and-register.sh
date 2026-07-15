@@ -74,12 +74,33 @@ log "Onboarding done"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
 
-# 7. Dist rebuild
-log "Rebuilding dist..."
-cd /home/ubuntu/openclaw && rm -rf dist
-CI=true node scripts/run-node.mjs --version 2>&1 | tail -3
-ls dist/index.js || die "dist build failed"
-log "Dist OK"
+# 7. Gateway init (disable reasoning + enable endpoints)
+log "Gateway init..."
+cd /home/ubuntu/openclaw
+
+# Disable DeepSeek V4 reasoning/thinking
+~/.npm-global/bin/pnpm openclaw config set agents.defaults.reasoningDefault off 2>/dev/null || true
+~/.npm-global/bin/pnpm openclaw config set agents.defaults.thinkingDefault off 2>/dev/null || true
+
+# Enable admin-http-rpc
+~/.npm-global/bin/pnpm openclaw plugins enable admin-http-rpc 2>/dev/null || true
+
+# Enable Chat Completions API
+~/.npm-global/bin/pnpm openclaw config patch --raw '{"gateway":{"http":{"endpoints":{"chatCompletions":{"enabled":true}}}}}' 2>/dev/null || true
+
+# Lock meta version
+python3 << 'PYEOF'
+import json, os
+cfg_path = os.path.expanduser("~/.openclaw/openclaw.json")
+if os.path.exists(cfg_path):
+    with open(cfg_path) as f:
+        cfg = json.load(f)
+    cfg.setdefault("meta", {})["lastTouchedVersion"] = "2026.6.11"
+    cfg.setdefault("wizard", {})["lastRunVersion"] = "2026.6.11"
+    with open(cfg_path, "w") as f:
+        json.dump(cfg, f, indent=2)
+PYEOF
+log "Gateway init OK"
 
 # 8. Config
 log "Config..."
@@ -96,6 +117,9 @@ grep -q npm-global ~/.bashrc 2>/dev/null || echo "export PATH=\"\$HOME/.local/bi
 S=~/.config/systemd/user/openclaw-gateway.service
 if [ -f "$S" ] && ! grep -q npm-global "$S" 2>/dev/null; then
   sed -i "s|Environment=PATH=.*|Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/ubuntu/.npm-global/bin:/home/ubuntu/.local/share/pnpm/bin:/home/ubuntu/.local/bin:/home/ubuntu/bin|" "$S"
+fi
+if [ -f "$S" ] && ! grep -q OPENCLAW_ALLOW "$S" 2>/dev/null; then
+  sed -i "/^\\[Service\\]/a Environment=OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1" "$S"
 fi
 log "Config OK"
 
