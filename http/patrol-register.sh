@@ -10,15 +10,16 @@
 #      - 正常运行 & 已注册 → 标记为 done
 #      - 未运行 → 记录失败原因，不上报注册
 #
+# 鉴权：ADMIN_API_KEY（Bearer），与 register-agent.py / quick-deploy 一致
+#
 # 配合 cron 每 10 分钟执行一次：
-#   */10 * * * * bash /home/ubuntu/ai-agent-deploy/http/patrol-register.sh
+#   */10 * * * * ADMIN_API_KEY=xxx bash /home/ubuntu/ai-agent-deploy/http/patrol-register.sh
 # ============================================================
 set -euo pipefail
 
 TRACKER_FILE="${TRACKER_FILE:-/tmp/deploy-tracker.json}"
 ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
-ADMIN_EMAIL="${ADMIN_EMAIL:?ADMIN_EMAIL}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:?ADMIN_PASSWORD}"
+ADMIN_API_KEY="${ADMIN_API_KEY:?ADMIN_API_KEY}"
 CHECK_DELAY_MINUTES="${CHECK_DELAY_MINUTES:-30}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/agent01_tencent}"
 
@@ -31,30 +32,18 @@ echo "=========================================="
 echo "  智能体注册巡逻 $(date '+%Y-%m-%d %H:%M')"
 echo "=========================================="
 
-# ── 1. 初始化/读取跟踪文件 ──
+# ── 1. 初始化跟踪文件 ──
 if [ ! -f "$TRACKER_FILE" ]; then
   echo '[]' > "$TRACKER_FILE"
 fi
 
-# ── 2. 登录管理平台 ──
-LOGIN_RESP=$(curl -s -X POST "$ADMIN_API/auth/login" \
-  -H "Content-Type: application/json" \
-  -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}")
-
-ADMIN_TOKEN=$(echo "$LOGIN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token',''))")
-
-if [ -z "$ADMIN_TOKEN" ]; then
-  echo "❌ 登录管理平台失败"
-  exit 1
-fi
-
-# ── 3. 获取已注册智能体 IP 列表 ──
+# ── 2. 获取已注册智能体 IP 列表 ──
 REGISTERED_IPS=$(curl -s "$ADMIN_API/admin/agents?limit=200" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  -H "Authorization: Bearer $ADMIN_API_KEY" | \
   python3 -c "import sys,json; [print(a.get('serverIp','')) for a in json.load(sys.stdin).get('data',[])]" 2>/dev/null || true)
 
-# ── 4. 处理每个待验证的部署记录 ──
-export TRACKER_FILE ADMIN_API ADMIN_TOKEN CHECK_DELAY_MINUTES SSH_KEY REGISTERED_IPS
+# ── 3. 处理每个待验证的部署记录 ──
+export TRACKER_FILE ADMIN_API ADMIN_API_KEY CHECK_DELAY_MINUTES SSH_KEY REGISTERED_IPS
 
 UPDATED=$(python3 << 'PYEOF'
 import json, time, subprocess, os
@@ -67,7 +56,7 @@ registered_ips = set(os.environ.get('REGISTERED_IPS', '').splitlines())
 check_delay = int(os.environ.get('CHECK_DELAY_MINUTES', '30'))
 ssh_key = os.path.expanduser(os.environ.get('SSH_KEY', '~/.ssh/agent01_tencent'))
 admin_api = os.environ['ADMIN_API'].rstrip('/')
-admin_token = os.environ['ADMIN_TOKEN']
+admin_api_key = os.environ['ADMIN_API_KEY']
 now = int(time.time())
 updated = False
 messages = []
@@ -150,7 +139,7 @@ for i, record in enumerate(tracker):
     r = subprocess.run([
         'curl', '-s', '-X', 'POST', f'{admin_api}/admin/agents',
         '-H', 'Content-Type: application/json',
-        '-H', f'Authorization: Bearer {admin_token}',
+        '-H', f'Authorization: Bearer {admin_api_key}',
         '-d', reg_payload,
     ], capture_output=True, text=True, timeout=30)
 
