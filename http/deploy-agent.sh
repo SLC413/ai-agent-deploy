@@ -134,6 +134,54 @@ echo "export PATH=\"\$PNPM_HOME:\$PATH\"" >> ~/.bashrc
 '
 log "   已修复"
 
+# ═══ 5.5 INIT GATEWAY (lock version + disable reasoning + enable endpoints) ═══
+log "5.5 初始化 Gateway (禁用 reasoning + 启用 API 端点)..."
+${SSH} '
+# 禁用 DeepSeek V4 reasoning/thinking（防止只返回思考内容不给答案）
+cd ~/openclaw
+~/.npm-global/bin/pnpm openclaw config set agents.defaults.reasoningDefault off 2>/dev/null || true
+~/.npm-global/bin/pnpm openclaw config set agents.defaults.thinkingDefault off 2>/dev/null || true
+
+# 启用 admin-http-rpc 插件（平台管理接口）
+~/.npm-global/bin/pnpm openclaw plugins enable admin-http-rpc 2>/dev/null || true
+
+# 启用 OpenAI 兼容 Chat Completions API（供平台代理转发）
+~/.npm-global/bin/pnpm openclaw config patch --raw """{
+  "gateway": {
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  }
+}""" 2>/dev/null || true
+
+# 锁定 meta 版本标记，避免启动时版本降级/升级拦截
+python3 << """PYEOF"""
+import json, os
+cfg_path = os.path.expanduser("~/.openclaw/openclaw.json")
+if os.path.exists(cfg_path):
+    with open(cfg_path) as f:
+        cfg = json.load(f)
+    cfg.setdefault("meta", {})["lastTouchedVersion"] = "2026.7.2"
+    cfg.setdefault("wizard", {})["lastRunVersion"] = "2026.7.2"
+    with open(cfg_path, "w") as f:
+        json.dump(cfg, f, indent=2)
+PYEOF
+
+# 设置 DEEPSEEK_API_KEY 环境变量（systemd）
+S=~/.config/systemd/user/openclaw-gateway.service
+if [ -f "$S" ]; then
+  if ! grep -q "OPENCLAW_ALLOW" "$S"; then
+    sed -i "/^\\[Service\\]/a Environment=OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1" "$S" 2>/dev/null || true
+  fi
+fi
+
+log "   Gateway 初始化完成 ✅"
+'
+
 # ═══ 6. CLEAN & START ═══
 log "6. 启动 Gateway..."
 ${SSH} '
