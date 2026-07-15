@@ -65,7 +65,7 @@ NPMRC'
     log "   matrix-sdk 二进制已预置(只读)"
   fi
   # 推送本地缓存的部署脚本
-  LOCAL_SCRIPT="/home/ubuntu/ai-agent-deploy/setup-openclaw-ubuntu.sh"
+  LOCAL_SCRIPT="/home/ubuntu/ai-agent-deploy/http/setup-openclaw-ubuntu.sh"
   if [ -f "${LOCAL_SCRIPT}" ]; then
     scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no "${LOCAL_SCRIPT}" ubuntu@${IP}:/tmp/setup-openclaw.sh 2>/dev/null || true
   fi
