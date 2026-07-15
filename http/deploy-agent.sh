@@ -137,15 +137,33 @@ log "   已修复"
 # ═══ 5.5 INIT GATEWAY (lock version + disable reasoning + enable endpoints) ═══
 log "5.5 初始化 Gateway (禁用 reasoning + 启用 API 端点)..."
 ${SSH} '
-# 禁用 DeepSeek V4 reasoning/thinking（防止只返回思考内容不给答案）
+# 0. 降级到稳定版 v2026.6.11（v2026.7.2 有流式聊天 draining bug）
+log "   安装 openclaw@2026.6.11（稳定版）..."
+npm install -g openclaw@2026.6.11 2>/dev/null || true
+
+# 切换 systemd 使用 npm 全局版本
+NPM_DIST="${HOME}/.npm-global/lib/node_modules/openclaw/dist/index.js"
+if [ -f "$NPM_DIST" ]; then
+  mkdir -p ~/.config/systemd/user/openclaw-gateway.service.d
+  cat > ~/.config/systemd/user/openclaw-gateway.service.d/exec.conf << UNIT
+[Service]
+ExecStart=
+ExecStart=/usr/bin/node ${NPM_DIST} gateway --port 18789
+Environment=OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1
+UNIT
+  systemctl --user daemon-reload
+  log "   systemd 已切换到 v2026.6.11"
+fi
+
+# 1. 禁用 DeepSeek V4 reasoning/thinking（防止只返回思考内容不给答案）
 cd ~/openclaw
 ~/.npm-global/bin/pnpm openclaw config set agents.defaults.reasoningDefault off 2>/dev/null || true
 ~/.npm-global/bin/pnpm openclaw config set agents.defaults.thinkingDefault off 2>/dev/null || true
 
-# 启用 admin-http-rpc 插件（平台管理接口）
+# 2. 启用 admin-http-rpc 插件（平台管理接口）
 ~/.npm-global/bin/pnpm openclaw plugins enable admin-http-rpc 2>/dev/null || true
 
-# 启用 OpenAI 兼容 Chat Completions API（供平台代理转发）
+# 3. 启用 OpenAI 兼容 Chat Completions API（供平台代理转发）
 ~/.npm-global/bin/pnpm openclaw config patch --raw """{
   "gateway": {
     "http": {
@@ -158,26 +176,18 @@ cd ~/openclaw
   }
 }""" 2>/dev/null || true
 
-# 锁定 meta 版本标记，避免启动时版本降级/升级拦截
+# 4. 锁定 meta 版本标记为 v2026.6.11
 python3 << """PYEOF"""
 import json, os
 cfg_path = os.path.expanduser("~/.openclaw/openclaw.json")
 if os.path.exists(cfg_path):
     with open(cfg_path) as f:
         cfg = json.load(f)
-    cfg.setdefault("meta", {})["lastTouchedVersion"] = "2026.7.2"
-    cfg.setdefault("wizard", {})["lastRunVersion"] = "2026.7.2"
+    cfg.setdefault("meta", {})["lastTouchedVersion"] = "2026.6.11"
+    cfg.setdefault("wizard", {})["lastRunVersion"] = "2026.6.11"
     with open(cfg_path, "w") as f:
         json.dump(cfg, f, indent=2)
 PYEOF
-
-# 设置 DEEPSEEK_API_KEY 环境变量（systemd）
-S=~/.config/systemd/user/openclaw-gateway.service
-if [ -f "$S" ]; then
-  if ! grep -q "OPENCLAW_ALLOW" "$S"; then
-    sed -i "/^\\[Service\\]/a Environment=OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1" "$S" 2>/dev/null || true
-  fi
-fi
 
 log "   Gateway 初始化完成 ✅"
 '
