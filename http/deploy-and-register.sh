@@ -96,53 +96,11 @@ log "Onboarding done"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
 
-# 7. Gateway init (disable reasoning + enable endpoints)
-log "Gateway init..."
-cd /home/ubuntu/openclaw
+# Gateway already configured in JSON
 
-# Disable DeepSeek V4 reasoning/thinking
-~/.npm-global/bin/pnpm openclaw config set agents.defaults.reasoningDefault off 2>/dev/null || true
-~/.npm-global/bin/pnpm openclaw config set agents.defaults.thinkingDefault off 2>/dev/null || true
-
-# Enable admin-http-rpc
-~/.npm-global/bin/pnpm openclaw plugins enable admin-http-rpc 2>/dev/null || true
-
-# Enable Chat Completions API
-~/.npm-global/bin/pnpm openclaw config patch --raw '{"gateway":{"http":{"endpoints":{"chatCompletions":{"enabled":true}}}}}' 2>/dev/null || true
-
-# Lock meta version
-python3 << 'PYEOF'
-import json, os
-cfg_path = os.path.expanduser("~/.openclaw/openclaw.json")
-if os.path.exists(cfg_path):
-    with open(cfg_path) as f:
-        cfg = json.load(f)
-    cfg.setdefault("meta", {})["lastTouchedVersion"] = "2026.6.11"
-    cfg.setdefault("wizard", {})["lastRunVersion"] = "2026.6.11"
-    with open(cfg_path, "w") as f:
-        json.dump(cfg, f, indent=2)
-PYEOF
-log "Gateway init OK"
-
-# 8. Config
+# Config (minimal)
 log "Config..."
-mkdir -p ~/.local/bin ~/.local/share/pnpm/bin ~/.config/systemd/user
-cat > ~/.local/bin/openclaw << 'W'
-#!/usr/bin/env bash
-cd "$HOME/openclaw" || exit 1
-exec "$HOME/.npm-global/bin/pnpm" openclaw "$@"
-W
-chmod +x ~/.local/bin/openclaw
-ln -sf ~/.npm-global/bin/pnpm ~/.local/share/pnpm/bin/pnpm 2>/dev/null || true
-cd ~/openclaw && CI=true ~/.npm-global/bin/pnpm approve-builds node-pty 2>/dev/null || true
-grep -q npm-global ~/.bashrc 2>/dev/null || echo "export PATH=\"\$HOME/.local/bin:\$HOME/.npm-global/bin:\$HOME/.local/share/pnpm/bin:\$PATH\"" >> ~/.bashrc
-S=~/.config/systemd/user/openclaw-gateway.service
-if [ -f "$S" ] && ! grep -q npm-global "$S" 2>/dev/null; then
-  sed -i "s|Environment=PATH=.*|Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/ubuntu/.npm-global/bin:/home/ubuntu/.local/share/pnpm/bin:/home/ubuntu/.local/bin:/home/ubuntu/bin|" "$S"
-fi
-if [ -f "$S" ] && ! grep -q OPENCLAW_ALLOW "$S" 2>/dev/null; then
-  sed -i "/^\\[Service\\]/a Environment=OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1" "$S"
-fi
+grep -q npm-global ~/.bashrc 2>/dev/null || echo "export PATH=\"\$HOME/.local/bin:\$HOME/.npm-global/bin:\$PATH\"" >> ~/.bashrc
 log "Config OK"
 
 # 9. Gateway（先启动，再注册）
