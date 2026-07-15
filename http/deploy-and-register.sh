@@ -83,6 +83,7 @@ git config --global --add safe.directory /home/ubuntu/openclaw 2>/dev/null
 
 # Install dependencies (package.json already patched for pnpm v11)
 log "  pnpm install (may take 1-2 minutes)..."
+rm -f npm-shrinkwrap.json pnpm-lock.yaml  # remove npm lockfile with stale patch refs
 pnpm install 2>&1 | tail -5
 [ -d node_modules ] || die "pnpm install failed"
 log "  pnpm install OK"
