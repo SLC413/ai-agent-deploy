@@ -72,25 +72,55 @@ p.write_text(json.dumps(cfg, indent=2) + "\n")
 print("pnpm.allowUnusedPatches=true")
 PY
 
-# 6. Onboarding
-log "Onboarding (takes several minutes)..."
-curl -sL "${DS}/setup-openclaw-ubuntu.sh" -o /tmp/setup.sh 2>/dev/null || true
-if [ -f /tmp/setup.sh ] && [ -s /tmp/setup.sh ]; then
-  OPENCLAW_SKIP_SYSTEM=1 DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}" bash /tmp/setup.sh > /tmp/onboard.log 2>&1 &
-else
-  log "setup script missing from DEPLOY_SERVER, fallback to GitHub"
-  curl -sL https://raw.githubusercontent.com/BIDXOM/setup-openclaw-ubuntu/refs/heads/main/setup-openclaw-ubuntu.sh | OPENCLAW_SKIP_SYSTEM=1 DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}" bash > /tmp/onboard.log 2>&1 &
-fi
-OPID=$!
-while kill -0 $OPID 2>/dev/null; do sleep 15; done
-wait $OPID
-ONBOARD_RC=$?
-pkill -f "openclaw onboard" 2>/dev/null || true
-sleep 3
-tail -50 /tmp/onboard.log || true
-[ "$ONBOARD_RC" -eq 0 ] || die "Onboarding failed (exit ${ONBOARD_RC}), see /tmp/onboard.log"
-[ -f /home/ubuntu/.openclaw/openclaw.json ] || die "缺少 ~/.openclaw/openclaw.json，onboard 未完成"
-log "Onboarding done"
+# 6. Setup (baseline pre-built, skip pnpm onboarding)
+log "Setup (baseline v2026.6.11 pre-built, skip pnpm install)..."
+cd /home/ubuntu/openclaw
+git init 2>/dev/null
+git remote add origin https://github.com/openclaw/openclaw.git 2>/dev/null
+git config --global --add safe.directory /home/ubuntu/openclaw 2>/dev/null
+
+# Generate gateway config
+mkdir -p /home/ubuntu/.openclaw
+TOKEN=$(python3 -c "import secrets;print(secrets.token_hex(32))")
+cat > /home/ubuntu/.openclaw/openclaw.json << JSONEOF
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "auth": { "token": "$TOKEN" },
+    "http": { "endpoints": { "chatCompletions": { "enabled": true } } }
+  },
+  "plugins": { "entries": { "admin-http-rpc": { "enabled": true } } },
+  "agents": { "defaults": { "reasoningDefault": "off", "thinkingDefault": "off" } },
+  "meta": { "lastTouchedVersion": "2026.6.11" },
+  "wizard": { "lastRunVersion": "2026.6.11" }
+}
+JSONEOF
+
+# Create systemd service
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/openclaw-gateway.service << UNITEOF
+[Unit]
+Description=OpenClaw Gateway (v2026.6.11)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /home/ubuntu/openclaw/dist/index.js gateway --port 18789
+Restart=always
+RestartSec=5
+RestartPreventExitStatus=78
+Environment=HOME=/home/ubuntu
+Environment=TMPDIR=/tmp
+Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/ubuntu/.npm-global/bin:/home/ubuntu/.local/share/pnpm/bin:/home/ubuntu/.local/bin
+Environment=OPENCLAW_GATEWAY_PORT=18789
+Environment=OPENCLAW_SYSTEMD_UNIT=openclaw-gateway.service
+[Install]
+WantedBy=default.target
+UNITEOF
+
+[ -f /home/ubuntu/.openclaw/openclaw.json ] || die "Failed to create openclaw.json"
+log "Setup done"
 
 # user systemd needs these when launched from a system unit
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
