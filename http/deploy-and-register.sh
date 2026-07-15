@@ -51,7 +51,7 @@ fi
 
 cd /home/ubuntu/openclaw
 echo "pnpm.allowUnusedPatches=true" >> .npmrc
-git init 2>/dev/null && git remote add origin https://github.com/openclaw/openclaw.git 2>/dev/null || true
+git init 2>/dev/null || true && git remote add origin 2>/dev/null || true https://github.com/openclaw/openclaw.git 2>/dev/null || true
 git config --global --add safe.directory /home/ubuntu/openclaw 2>/dev/null || true
 
 # baseline 常带过期 patchedDependencies → ERR_PNPM_UNUSED_PATCH
@@ -75,8 +75,8 @@ PY
 # 6. Setup (baseline pre-built, skip pnpm onboarding)
 log "Setup (baseline v2026.6.11 pre-built, skip pnpm install)..."
 cd /home/ubuntu/openclaw
-git init 2>/dev/null
-git remote add origin https://github.com/openclaw/openclaw.git 2>/dev/null
+git init 2>/dev/null || true
+git remote add origin 2>/dev/null || true https://github.com/openclaw/openclaw.git 2>/dev/null
 git config --global --add safe.directory /home/ubuntu/openclaw 2>/dev/null
 
 # Generate gateway config
