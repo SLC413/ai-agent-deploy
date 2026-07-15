@@ -77,7 +77,7 @@ fi
 
 # ═══ 3. ONBOARDING ═══
 log "3. Onboarding (系统依赖 + pnpm install + 初始化)..."
-${SSH} "export DEEPSEEK_API_KEY='***' && ${USE_LOCAL_SCRIPT}" 2>&1 | \
+${SSH} "export DEEPSEEK_API_KEY='${DEEPSEEK_KEY}' && ${USE_LOCAL_SCRIPT}" 2>&1 | \
   grep -E "^(==>|OpenClaw|Gateway|服务器|✅|部署完成|================================)" || true
 
 sleep 3
@@ -111,7 +111,7 @@ fi
 
 # API Key
 if [ -f "$S" ]; then
-  sed -i "/^\[Service\]/a Environment=DEEPSEEK_API_KEY=***" "$S" 2>/dev/null || true
+  sed -i "/^\[Service\]/a Environment=DEEPSEEK_API_KEY='"${DEEPSEEK_KEY}"'" "$S" 2>/dev/null || true
 fi
 
 # 创建 openclaw wrapper

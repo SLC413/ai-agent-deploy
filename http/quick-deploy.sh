@@ -6,12 +6,13 @@ set -euo pipefail
 # ============================================================
 
 SSH_KEY="${1:?需要 SSH_KEY}"
-API_KEY="***"
+API_KEY="${2:?需要 API_KEY}"
 DEEPSEEK_KEY="${3:?需要 DEEPSEEK_API_KEY}"
-IP="$4"
+IP="${4:?需要 IP}"
 
 DEPLOY_SERVER="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
+AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ubuntu@${IP}"
 
 echo "Pushing deploy service to ${IP}..."
@@ -30,9 +31,9 @@ WorkingDirectory=/tmp
 
 Environment=DEPLOY_SERVER=${DEPLOY_SERVER}
 Environment=ADMIN_API=${ADMIN_API}
-Environment=ADMIN_API_KEY=***
-Environment=DEEPSEEK_API_KEY=***
-Environment=AGENT_PROVIDER=Tencent
+Environment=ADMIN_API_KEY=${API_KEY}
+Environment=DEEPSEEK_API_KEY=${DEEPSEEK_KEY}
+Environment=AGENT_PROVIDER=${AGENT_PROVIDER}
 
 ExecStart=/bin/bash -c 'curl -sL \${DEPLOY_SERVER}/register-agent.py -o /tmp/register-agent.py && curl -sL \${DEPLOY_SERVER}/deploy-and-register.sh -o /tmp/deploy-and-register.sh && bash /tmp/deploy-and-register.sh'
 
@@ -52,19 +53,19 @@ echo ""
 echo "✅ 已启动 — 服务会自动完成部署+注册"
 echo "查看日志: ssh -i ${SSH_KEY} ubuntu@${IP} 'sudo journalctl -u deploy-agent -f'"
 
-# 记录部署到跟踪文件
+# 记录部署到跟踪文件（供 patrol-register.sh 补注册）
 python3 << PYEOF
 import json, time
 tracker_file = '/tmp/deploy-tracker.json'
 record = {
     'ip': '${IP}',
-    'provider': 'Tencent',
+    'provider': '${AGENT_PROVIDER}',
     'status': 'deploying',
     'deploy_at': int(time.time())
 }
 try:
     tracker = json.load(open(tracker_file))
-except:
+except Exception:
     tracker = []
 tracker.append(record)
 json.dump(tracker, open(tracker_file, 'w'), ensure_ascii=False, indent=2)

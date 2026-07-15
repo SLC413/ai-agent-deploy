@@ -4,9 +4,10 @@ log()  { echo "[$(date +%H:%M:%S)] $*"; }
 die()  { log "FATAL: $*"; exit 1; }
 
 DS="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
-API="${ADMIN_API:-https://www.nika8.com/api}"
+export ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
 : "${DEEPSEEK_API_KEY:?need DEEPSEEK_API_KEY}"
 : "${ADMIN_API_KEY:?need ADMIN_API_KEY}"
+export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 export CI=true
 
 IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ip.sb 2>/dev/null || echo unknown)
@@ -93,12 +94,13 @@ if [ -f "$S" ] && ! grep -q npm-global "$S" 2>/dev/null; then
 fi
 log "Config OK"
 
-# 9. Register
-log "Registering to hot pool..."
-python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$(curl -s ifconfig.me || curl -s ip.sb)" 2>&1 && log "Register OK" || log "Register had issues (non-fatal)"
-
-# 10. Gateway
+# 9. Gateway（先启动，再注册）
 log "Starting Gateway..."
+# 确保 DEEPSEEK key 写入 user systemd 服务
+S=~/.config/systemd/user/openclaw-gateway.service
+if [ -f "$S" ] && ! grep -q '^Environment=DEEPSEEK_API_KEY=' "$S" 2>/dev/null; then
+  sed -i "/^\[Service\]/a Environment=DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}" "$S"
+fi
 rm -f ~/.openclaw/state/openclaw.sqlite* 2>/dev/null
 sudo loginctl enable-linger ubuntu 2>/dev/null || true
 systemctl --user daemon-reload 2>/dev/null || true
@@ -106,5 +108,11 @@ systemctl --user start openclaw-gateway 2>/dev/null || true
 sleep 20
 HEALTH=$(curl -s -m 5 http://127.0.0.1:18789/health 2>/dev/null || echo "FAIL")
 echo "$HEALTH" | grep -q "ok.*true" && log "Gateway LIVE" || log "Gateway: ${HEALTH}"
+
+# 10. Register
+log "Registering to hot pool..."
+PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ip.sb 2>/dev/null || echo "${IP}")
+python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$PUBLIC_IP" "$AGENT_PROVIDER" 2>&1 \
+  && log "Register OK" || log "Register had issues (non-fatal)"
 
 log "=== DEPLOY COMPLETE ==="
