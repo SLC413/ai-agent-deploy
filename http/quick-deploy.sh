@@ -15,6 +15,8 @@ ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
 AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ubuntu@${IP}"
 
+[ -f "${SSH_KEY}" ] || { echo "❌ SSH_KEY 不存在: ${SSH_KEY}"; exit 1; }
+
 echo "Pushing deploy service to ${IP}..."
 
 cat > /tmp/deploy-${IP}.service << EOF

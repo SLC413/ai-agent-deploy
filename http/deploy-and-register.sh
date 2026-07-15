@@ -59,6 +59,7 @@ curl -sL "${DS}/setup-openclaw-ubuntu.sh" -o /tmp/setup.sh 2>/dev/null || true
 if [ -f /tmp/setup.sh ] && [ -s /tmp/setup.sh ]; then
   DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}" bash /tmp/setup.sh > /tmp/onboard.log 2>&1 &
 else
+  log "setup script missing from DEPLOY_SERVER, fallback to GitHub"
   curl -sL https://raw.githubusercontent.com/BIDXOM/setup-openclaw-ubuntu/refs/heads/main/setup-openclaw-ubuntu.sh | DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}" bash > /tmp/onboard.log 2>&1 &
 fi
 OPID=$!
@@ -68,6 +69,10 @@ pkill -f "openclaw onboard" 2>/dev/null || true
 sleep 3
 tail -10 /tmp/onboard.log
 log "Onboarding done"
+
+# user systemd needs these when launched from a system unit
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
 
 # 7. Dist rebuild
 log "Rebuilding dist..."
@@ -96,14 +101,16 @@ log "Config OK"
 
 # 9. Gateway（先启动，再注册）
 log "Starting Gateway..."
-# 确保 DEEPSEEK key 写入 user systemd 服务
+# 确保 DEEPSEEK key 写入 user systemd 服务（避免 sed 分隔符冲突，用 |）
 S=~/.config/systemd/user/openclaw-gateway.service
 if [ -f "$S" ] && ! grep -q '^Environment=DEEPSEEK_API_KEY=' "$S" 2>/dev/null; then
+  # append 文本不受 sed 分隔符影响；key 含换行会坏，DeepSeek key 通常无此问题
   sed -i "/^\[Service\]/a Environment=DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}" "$S"
 fi
 rm -f ~/.openclaw/state/openclaw.sqlite* 2>/dev/null
 sudo loginctl enable-linger ubuntu 2>/dev/null || true
 systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user reset-failed openclaw-gateway 2>/dev/null || true
 systemctl --user start openclaw-gateway 2>/dev/null || true
 sleep 20
 HEALTH=$(curl -s -m 5 http://127.0.0.1:18789/health 2>/dev/null || echo "FAIL")

@@ -64,12 +64,17 @@ NPMRC'
     ${SSH} 'mkdir -p ~/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs && cp /tmp/matrix-sdk-crypto.linux-x64-gnu.node ~/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs/ && chmod 444 ~/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs/matrix-sdk-crypto.linux-x64-gnu.node' 2>/dev/null || true
     log "   matrix-sdk 二进制已预置(只读)"
   fi
-  # 推送本地缓存的部署脚本
+  # 推送本地缓存的部署脚本；缺失则回退 GitHub
   LOCAL_SCRIPT="/home/ubuntu/ai-agent-deploy/http/setup-openclaw-ubuntu.sh"
   if [ -f "${LOCAL_SCRIPT}" ]; then
     scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no "${LOCAL_SCRIPT}" ubuntu@${IP}:/tmp/setup-openclaw.sh 2>/dev/null || true
   fi
-  USE_LOCAL_SCRIPT="bash /tmp/setup-openclaw.sh"
+  if ${SSH} 'test -s /tmp/setup-openclaw.sh' 2>/dev/null; then
+    USE_LOCAL_SCRIPT="bash /tmp/setup-openclaw.sh"
+  else
+    warn "   本地 setup 脚本不可用，回退 GitHub"
+    USE_LOCAL_SCRIPT="bash <(curl -sL ${SCRIPT_URL})"
+  fi
 else
   log "   npmjs 延迟 ${NPM_LATENCY}s，无需镜像"
   USE_LOCAL_SCRIPT="bash <(curl -sL ${SCRIPT_URL})"

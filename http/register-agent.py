@@ -36,23 +36,23 @@ py_cmd = (
     "['gateway']['auth']['token'])"
 )
 
-# Prefer local config when registering on the agent host itself
-if os.path.exists(local_cfg):
-    print('[register] Reading local Gateway Token...')
-    r = subprocess.run(
-        ['python3', '-c',
-         "import json; print(json.load(open(%r))['gateway']['auth']['token'])" % local_cfg],
-        capture_output=True, text=True, timeout=10,
-    )
-elif os.path.exists(ssh_key):
+# Control host with SSH key → remote; agent VPS (no key) → local config
+if os.path.exists(ssh_key):
     print(f'[register] Reading {ip} Gateway Token via SSH...')
     r = subprocess.run(
         ['ssh', '-i', ssh_key, '-o', 'StrictHostKeyChecking=no',
          '-o', 'ConnectTimeout=10', f'ubuntu@{ip}', 'python3'],
         input=py_cmd, capture_output=True, text=True, timeout=15,
     )
+elif os.path.exists(local_cfg):
+    print('[register] Reading local Gateway Token...')
+    r = subprocess.run(
+        ['python3', '-c',
+         "import json; print(json.load(open(%r))['gateway']['auth']['token'])" % local_cfg],
+        capture_output=True, text=True, timeout=10,
+    )
 else:
-    print(f'FAILED: no local config ({local_cfg}) and no SSH key ({ssh_key})')
+    print(f'FAILED: no SSH key ({ssh_key}) and no local config ({local_cfg})')
     sys.exit(1)
 
 gw_token = r.stdout.strip()

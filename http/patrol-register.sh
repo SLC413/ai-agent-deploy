@@ -11,16 +11,21 @@
 #      - 未运行 → 记录失败原因，不上报注册
 #
 # 配合 cron 每 10 分钟执行一次：
-#   */10 * * * * bash /home/ubuntu/ai-agent-deploy/patrol-register.sh
+#   */10 * * * * bash /home/ubuntu/ai-agent-deploy/http/patrol-register.sh
 # ============================================================
 set -euo pipefail
 
-TRACKER_FILE="/tmp/deploy-tracker.json"
+TRACKER_FILE="${TRACKER_FILE:-/tmp/deploy-tracker.json}"
 ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
 ADMIN_EMAIL="${ADMIN_EMAIL:?ADMIN_EMAIL}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:?ADMIN_PASSWORD}"
 CHECK_DELAY_MINUTES="${CHECK_DELAY_MINUTES:-30}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/agent01_tencent}"
+
+if [ ! -f "$SSH_KEY" ]; then
+  echo "❌ SSH_KEY 不存在: $SSH_KEY"
+  exit 1
+fi
 
 echo "=========================================="
 echo "  智能体注册巡逻 $(date '+%Y-%m-%d %H:%M')"
