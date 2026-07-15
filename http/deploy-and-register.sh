@@ -50,6 +50,7 @@ if [ "${LATENCY%%.*}" -ge 2 ]; then
 fi
 
 cd /home/ubuntu/openclaw
+echo "pnpm.allowUnusedPatches=true" >> .npmrc
 git init 2>/dev/null && git remote add origin https://github.com/openclaw/openclaw.git 2>/dev/null || true
 git config --global --add safe.directory /home/ubuntu/openclaw 2>/dev/null || true
 
