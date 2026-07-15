@@ -178,7 +178,7 @@ cat > /home/ubuntu/.openclaw/openclaw.json << JSONEOF
     "http": { "endpoints": { "chatCompletions": { "enabled": true } } }
   },
   "plugins": { "entries": { "admin-http-rpc": { "enabled": true } } },
-  "agents": { "defaults": { "reasoningDefault": "off", "thinkingDefault": "off" } },
+  "agents": { "defaults": { "model": { "primary": "deepseek/deepseek-v4-flash" }, "reasoningDefault": "off", "thinkingDefault": "off" } },
   "meta": { "lastTouchedVersion": "2026.6.11" },
   "wizard": { "lastRunVersion": "2026.6.11" }
 }
