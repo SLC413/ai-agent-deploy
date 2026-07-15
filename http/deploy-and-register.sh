@@ -53,6 +53,27 @@ cd /home/ubuntu/openclaw
 git init 2>/dev/null && git remote add origin https://github.com/openclaw/openclaw.git 2>/dev/null || true
 git config --global --add safe.directory /home/ubuntu/openclaw 2>/dev/null || true
 
+# baseline 常带过期 patchedDependencies → ERR_PNPM_UNUSED_PATCH
+python3 << 'PY'
+import json
+from pathlib import Path
+p = Path("/home/ubuntu/openclaw/package.json")
+cfg = json.loads(p.read_text())
+pnpm_cfg = cfg.setdefault("pnpm", {})
+pnpm_cfg["allowUnusedPatches"] = True
+pnpm_cfg["allowNonAppliedPatches"] = True
+# 直接删掉已知会踩坑的过期 patch（更稳）
+patched = pnpm_cfg.get("patchedDependencies") or {}
+drop = [k for k in list(patched) if "claude-agent-acp" in k]
+for k in drop:
+    patched.pop(k, None)
+    print(f"removed unused patch: {k}")
+if drop:
+    pnpm_cfg["patchedDependencies"] = patched
+p.write_text(json.dumps(cfg, indent=2) + "\n")
+print("pnpm.allowUnusedPatches=true")
+PY
+
 # 6. Onboarding
 log "Onboarding (takes several minutes)..."
 curl -sL "${DS}/setup-openclaw-ubuntu.sh" -o /tmp/setup.sh 2>/dev/null || true
@@ -64,10 +85,13 @@ else
 fi
 OPID=$!
 while kill -0 $OPID 2>/dev/null; do sleep 15; done
-wait $OPID || true
+wait $OPID
+ONBOARD_RC=$?
 pkill -f "openclaw onboard" 2>/dev/null || true
 sleep 3
-tail -10 /tmp/onboard.log
+tail -30 /tmp/onboard.log || true
+[ "$ONBOARD_RC" -eq 0 ] || die "Onboarding failed (exit ${ONBOARD_RC}), see /tmp/onboard.log"
+[ -f /home/ubuntu/.openclaw/openclaw.json ] || die "缺少 ~/.openclaw/openclaw.json，onboard 未完成"
 log "Onboarding done"
 
 # user systemd needs these when launched from a system unit

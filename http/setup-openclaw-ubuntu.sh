@@ -203,6 +203,28 @@ git remote -v
 echo ""
 echo "==> 11. 安装依赖"
 
+# baseline 可能含过期 patchedDependencies（ERR_PNPM_UNUSED_PATCH），放行并清理已知坏项
+python3 << 'PY'
+import json
+from pathlib import Path
+p = Path("package.json")
+if not p.exists():
+    raise SystemExit(0)
+cfg = json.loads(p.read_text())
+pnpm_cfg = cfg.setdefault("pnpm", {})
+pnpm_cfg["allowUnusedPatches"] = True
+pnpm_cfg["allowNonAppliedPatches"] = True
+patched = pnpm_cfg.get("patchedDependencies") or {}
+drop = [k for k in list(patched) if "claude-agent-acp" in k]
+for k in drop:
+    patched.pop(k, None)
+    print(f"  removed unused patch: {k}")
+if drop:
+    pnpm_cfg["patchedDependencies"] = patched
+p.write_text(json.dumps(cfg, indent=2) + "\n")
+print("  pnpm.allowUnusedPatches=true")
+PY
+
 pnpm install
 
 echo ""
