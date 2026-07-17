@@ -27,6 +27,8 @@ echo "  SSH_KEY:       ${SSH_KEY}"
 echo "=========================================="
 
 echo "[1/4] SSH 连通性检查..."
+# 格式化重装后 host key 会变，先清除旧指纹
+ssh-keygen -R "${IP}" 2>/dev/null || true
 ${SSH} 'echo OK $(hostname) $(whoami)' || { echo "❌ SSH 失败"; exit 1; }
 
 echo "[2/4] 写入并启动 deploy-agent.service ..."

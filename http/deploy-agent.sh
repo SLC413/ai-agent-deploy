@@ -28,6 +28,7 @@ echo "==========================================\n"
 
 # ═══ 0. PREFLIGHT ═══
 log "0. 前置检查"
+ssh-keygen -R "${IP}" 2>/dev/null || true
 ${SSH} 'hostname' &>/dev/null || err "SSH 连接失败: ${IP}"
 log "   SSH OK"
 
