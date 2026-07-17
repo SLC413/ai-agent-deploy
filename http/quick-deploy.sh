@@ -26,12 +26,12 @@ echo "  PROVIDER:      ${AGENT_PROVIDER}"
 echo "  SSH_KEY:       ${SSH_KEY}"
 echo "=========================================="
 
-echo "[1/4] SSH 连通性检查..."
+echo "[1/2] SSH 连通性检查..."
 # 格式化重装后 host key 会变，先清除旧指纹
 ssh-keygen -R "${IP}" 2>/dev/null || true
 ${SSH} 'echo OK $(hostname) $(whoami)' || { echo "❌ SSH 失败"; exit 1; }
 
-echo "[2/4] 写入并启动 deploy-agent.service ..."
+echo "[2/2] 派发 deploy-agent.service ..."
 
 cat > /tmp/deploy-${IP}.service << EOF
 [Unit]
@@ -62,32 +62,22 @@ WantedBy=multi-user.target
 EOF
 
 scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no /tmp/deploy-${IP}.service ubuntu@${IP}:/tmp/deploy-agent.service
-${SSH} 'sudo mv /tmp/deploy-agent.service /etc/systemd/system/deploy-agent.service && sudo systemctl daemon-reload && sudo systemctl reset-failed deploy-agent.service 2>/dev/null; sudo systemctl start deploy-agent.service'
+${SSH} 'sudo mv /tmp/deploy-agent.service /etc/systemd/system/deploy-agent.service && sudo systemctl daemon-reload && sudo systemctl reset-failed deploy-agent.service 2>/dev/null; sudo systemctl start deploy-agent.service && systemctl is-active deploy-agent.service'
 rm -f /tmp/deploy-${IP}.service
 
-echo "[3/4] 确认服务已进入 active/activating..."
-${SSH} 'systemctl is-active deploy-agent.service; systemctl status deploy-agent.service --no-pager -l | head -20' || true
-
-echo "[4/4] 跟踪记录"
 echo ""
-echo "✅ 已启动 — 服务会自动完成部署+注册"
-echo "查看日志: ssh -i ${SSH_KEY} ubuntu@${IP} 'sudo journalctl -u deploy-agent -f'"
+echo "✅ ${IP} 已派发 — 目标机正在自动部署+注册，可以继续下一个"
+echo "   查看日志: ssh -i ${SSH_KEY} ubuntu@${IP} 'sudo journalctl -u deploy-agent -f'"
 
-# 记录部署到跟踪文件（供 patrol-register.sh 补注册）
-python3 << PYEOF
+# 记录到跟踪文件（供 patrol-register.sh 补注册）
+python3 -c "
 import json, time
-tracker_file = '/tmp/deploy-tracker.json'
-record = {
-    'ip': '${IP}',
-    'provider': '${AGENT_PROVIDER}',
-    'status': 'deploying',
-    'deploy_at': int(time.time())
-}
+t = '/tmp/deploy-tracker.json'
 try:
-    tracker = json.load(open(tracker_file))
-except Exception:
-    tracker = []
-tracker.append(record)
-json.dump(tracker, open(tracker_file, 'w'), ensure_ascii=False, indent=2)
-print("📝 部署记录已写入 (30分钟后自动验证注册)")
-PYEOF
+    d = json.load(open(t))
+except:
+    d = []
+d.append({'ip':'${IP}','provider':'${AGENT_PROVIDER}','status':'deploying','deploy_at':int(time.time())})
+json.dump(d, open(t,'w'))
+print('📝 已记录')
+"
