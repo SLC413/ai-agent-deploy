@@ -62,7 +62,7 @@ WantedBy=multi-user.target
 EOF
 
 scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no /tmp/deploy-${IP}.service ubuntu@${IP}:/tmp/deploy-agent.service
-${SSH} 'sudo mv /tmp/deploy-agent.service /etc/systemd/system/deploy-agent.service && sudo systemctl daemon-reload && sudo systemctl reset-failed deploy-agent.service 2>/dev/null; sudo systemctl start deploy-agent.service && systemctl is-active deploy-agent.service'
+${SSH} 'sudo mv /tmp/deploy-agent.service /etc/systemd/system/deploy-agent.service && sudo systemctl daemon-reload && sudo systemctl reset-failed deploy-agent.service 2>/dev/null; sudo systemctl start --no-block deploy-agent.service && systemctl is-active deploy-agent.service'
 rm -f /tmp/deploy-${IP}.service
 
 echo ""
