@@ -129,6 +129,17 @@ cfg = json.loads(p.read_text())
 pnpm_cfg = cfg.setdefault("pnpm", {})
 pnpm_cfg["allowUnusedPatches"] = True
 pnpm_cfg["allowNonAppliedPatches"] = True
+
+# matrix-sdk-crypto-nodejs 0.6.1+ 支持 MATRIX_SDK_CRYPTO_DOWNLOADS_BASE_URL 环境变量
+# baseline 锁了 0.6.0，直接升级 extensions/matrix/package.json 中的精确版本
+matrix_pkg = Path("/home/ubuntu/openclaw/extensions/matrix/package.json")
+if matrix_pkg.exists():
+    mcfg = json.loads(matrix_pkg.read_text())
+    mcfg["dependencies"]["@matrix-org/matrix-sdk-crypto-nodejs"] = "0.6.1"
+    mcfg["dependencies"]["@matrix-org/matrix-sdk-crypto-wasm"] = "18.3.1"
+    matrix_pkg.write_text(json.dumps(mcfg, indent=2) + "\n")
+    print("[patch] @matrix-org/matrix-sdk-crypto-nodejs -> 0.6.1")
+
 patched = pnpm_cfg.get("patchedDependencies") or {}
 if patched:
     print(f"[patch] cleared {len(patched)} patchedDependencies entries")
@@ -141,6 +152,12 @@ PY
 
 # 7. pnpm install
 step "7/10 pnpm install"
+
+# matrix-sdk-crypto-nodejs v0.6.1+ 支持此环境变量，
+# 设置后 postinstall 从内网镜像下载二进制，不再走 GitHub Releases
+# 覆盖 MATRIX_SDK_CRYPTO_BASE_URL 可切换镜像源
+export MATRIX_SDK_CRYPTO_DOWNLOADS_BASE_URL="${MATRIX_SDK_CRYPTO_BASE_URL:-https://training.xhl413.com/binaries}"
+
 cd /home/ubuntu/openclaw
 rm -f npm-shrinkwrap.json
 # 保留 pnpm-lock.yaml 若存在，仅在 install 失败时再删重试

@@ -229,6 +229,9 @@ p.write_text(json.dumps(cfg, indent=2) + "\n")
 print("  pnpm.allowUnusedPatches=true")
 PY
 
+# 国内 GitHub Releases 下载慢，走内网二进制镜像
+export MATRIX_SDK_CRYPTO_DOWNLOADS_BASE_URL="${MATRIX_SDK_CRYPTO_BASE_URL:-https://training.xhl413.com/binaries}"
+
 pnpm install
 
 echo ""
