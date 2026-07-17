@@ -181,13 +181,6 @@ fi
 [ -f dist/index.js ] || die "dist/index.js missing — baseline 不完整，无法启动 gateway"
 log "pnpm install OK; node_modules=$(du -sh node_modules 2>/dev/null | awk '{print $1}')"
 
-# 安装微信插件（渠道配置留给岗前培训）
-npm install @tencent-weixin/openclaw-weixin@latest --no-save --legacy-peer-deps 2>/dev/null || \
-  log "WARN: weixin plugin npm install failed (non-fatal)"
-export PATH="$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"
-~/.npm-global/bin/pnpm openclaw plugins install @tencent-weixin/openclaw-weixin 2>/dev/null || \
-  log "WARN: weixin plugin openclaw install failed (non-fatal)"
-
 # 8. Write openclaw.json + systemd unit
 step "8/10 Write config + systemd unit"
 mkdir -p /home/ubuntu/.openclaw ~/.config/systemd/user ~/.local/bin
@@ -262,6 +255,12 @@ NOW=$(date +%s)000
 echo "{\"builtAt\":$NOW,\"head\":\"$HEAD\"}" > dist/.buildstamp
 echo "{\"syncedAt\":$NOW,\"head\":\"$HEAD\"}" > dist/.runtime-postbuildstamp
 log "build stamps synced to git HEAD: ${HEAD:0:12}"
+
+# 安装微信插件（渠道配置留给岗前培训，build stamp 已修复，CLI 可正常工作）
+export PATH="$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$HOME/.local/bin:$PATH"
+npm install @tencent-weixin/openclaw-weixin@latest --no-save --legacy-peer-deps 2>/dev/null || true
+~/.npm-global/bin/pnpm openclaw plugins install @tencent-weixin/openclaw-weixin 2>/dev/null && \
+  log "weixin plugin installed" || log "WARN: weixin plugin install failed (non-fatal)"
 
 grep -q npm-global ~/.bashrc 2>/dev/null \
   || echo 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"' >> ~/.bashrc
