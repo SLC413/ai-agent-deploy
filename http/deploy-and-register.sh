@@ -237,6 +237,32 @@ WantedBy=default.target
 UNITEOF
 log "systemd unit written: ~/.config/systemd/user/openclaw-gateway.service"
 
+# 创建 openclaw CLI wrapper + PATH
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"
+cat > ~/.local/bin/openclaw << 'WRAPPER'
+#!/usr/bin/env bash
+cd "$HOME/openclaw" || exit 1
+exec "$HOME/.npm-global/bin/pnpm" openclaw "$@"
+WRAPPER
+chmod +x ~/.local/bin/openclaw
+grep -q "npm-global" ~/.bashrc 2>/dev/null \
+  || echo 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"' >> ~/.bashrc
+log "openclaw CLI wrapper created"
+
+# baseline 的 dist 是预构建的，需要修复 build stamp 避免 CLI 触发不必要的重建
+# 1. 将所有文件纳入 git（避免 "dirty tree" 触发重建）
+cd /home/ubuntu/openclaw
+git config user.email "deploy@agent.local" 2>/dev/null || true
+git config user.name "Deploy" 2>/dev/null || true
+git add -A 2>/dev/null || true
+git commit -m "baseline snapshot" 2>/dev/null || true
+HEAD=$(git rev-parse HEAD 2>/dev/null || echo "no-commit")
+NOW=$(date +%s)000
+# 2. 创建/更新 build stamp 文件
+echo "{\"builtAt\":$NOW,\"head\":\"$HEAD\"}" > dist/.buildstamp
+echo "{\"syncedAt\":$NOW,\"head\":\"$HEAD\"}" > dist/.runtime-postbuildstamp
+log "build stamps synced to git HEAD: ${HEAD:0:12}"
+
 grep -q npm-global ~/.bashrc 2>/dev/null \
   || echo 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"' >> ~/.bashrc
 
