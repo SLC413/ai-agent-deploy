@@ -194,7 +194,7 @@ cat > /home/ubuntu/.openclaw/openclaw.json << JSONEOF
     "auth": { "mode": "token", "token": "${TOKEN}" },
     "http": { "endpoints": { "chatCompletions": { "enabled": true } } }
   },
-  "plugins": { "entries": { "admin-http-rpc": { "enabled": true } } },
+  "plugins": { "entries": { "admin-http-rpc": { "enabled": true }, "@tencent-weixin/openclaw-weixin": { "enabled": true } } },
   "agents": { "defaults": { "model": { "primary": "deepseek/deepseek-v4-flash" }, "reasoningDefault": "off", "thinkingDefault": "off" } },
   "meta": { "lastTouchedVersion": "2026.6.11" },
   "wizard": { "lastRunVersion": "2026.6.11" }

@@ -139,6 +139,11 @@ cd ~/openclaw
 # 启用 admin-http-rpc 插件
 ~/.npm-global/bin/pnpm openclaw plugins enable admin-http-rpc 2>/dev/null || true
 
+# 安装并启用微信插件
+~/.npm-global/bin/pnpm openclaw plugins install @tencent-weixin/openclaw-weixin 2>/dev/null || \
+  npm install -g @tencent-weixin/openclaw-weixin@latest --no-save --legacy-peer-deps 2>/dev/null || true
+~/.npm-global/bin/pnpm openclaw plugins enable @tencent-weixin/openclaw-weixin 2>/dev/null || true
+
 # 启用 OpenAI Chat Completions API
 ~/.npm-global/bin/pnpm openclaw config patch --raw """{
   "gateway": {

@@ -346,6 +346,11 @@ echo "  安装插件..."
 echo "  安装 admin-http-rpc 插件..."
 openclaw plugins install admin-http-rpc 2>/dev/null || echo "  ⚠️  admin-http-rpc 安装或启用失败"
 
+echo "  安装微信插件..."
+openclaw plugins install @tencent-weixin/openclaw-weixin 2>/dev/null || \
+  npm install @tencent-weixin/openclaw-weixin@latest --no-save --legacy-peer-deps 2>/dev/null || \
+  echo "  ⚠️  微信插件安装失败，请稍后手动安装"
+
 # 飞书插件
 if [ "$SKIP_FEISHU" = false ]; then
   echo "  安装 @openclaw/feishu 插件..."
@@ -378,6 +383,10 @@ if os.path.exists(path):
     entries = plugins.setdefault('entries', {})
     ahp = entries.setdefault('admin-http-rpc', {})
     ahp['enabled'] = True
+
+    # 启用微信插件（渠道配置留给岗前培训）
+    weixin = entries.setdefault('@tencent-weixin/openclaw-weixin', {})
+    weixin['enabled'] = True
 
     # 飞书渠道默认开放 + 自动配置 App ID / App Secret
     feishu_id = os.environ.get('FEISHU_APP_ID', '')
