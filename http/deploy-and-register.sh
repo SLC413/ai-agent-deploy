@@ -181,6 +181,13 @@ fi
 [ -f dist/index.js ] || die "dist/index.js missing — baseline 不完整，无法启动 gateway"
 log "pnpm install OK; node_modules=$(du -sh node_modules 2>/dev/null | awk '{print $1}')"
 
+# 安装微信插件（渠道配置留给岗前培训）
+npm install @tencent-weixin/openclaw-weixin@latest --no-save --legacy-peer-deps 2>/dev/null || \
+  log "WARN: weixin plugin npm install failed (non-fatal)"
+export PATH="$HOME/.npm-global/bin:$HOME/.local/share/pnpm/bin:$PATH"
+~/.npm-global/bin/pnpm openclaw plugins install @tencent-weixin/openclaw-weixin 2>/dev/null || \
+  log "WARN: weixin plugin openclaw install failed (non-fatal)"
+
 # 8. Write openclaw.json + systemd unit
 step "8/10 Write config + systemd unit"
 mkdir -p /home/ubuntu/.openclaw ~/.config/systemd/user ~/.local/bin
@@ -194,7 +201,7 @@ cat > /home/ubuntu/.openclaw/openclaw.json << JSONEOF
     "auth": { "mode": "token", "token": "${TOKEN}" },
     "http": { "endpoints": { "chatCompletions": { "enabled": true } } }
   },
-  "plugins": { "entries": { "admin-http-rpc": { "enabled": true }, "@tencent-weixin/openclaw-weixin": { "enabled": true } } },
+  "plugins": { "entries": { "admin-http-rpc": { "enabled": true }, "openclaw-weixin": { "enabled": true } } },
   "agents": { "defaults": { "model": { "primary": "deepseek/deepseek-v4-flash" }, "reasoningDefault": "off", "thinkingDefault": "off" } },
   "meta": { "lastTouchedVersion": "2026.6.11" },
   "wizard": { "lastRunVersion": "2026.6.11" }

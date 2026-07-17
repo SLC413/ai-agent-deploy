@@ -385,7 +385,7 @@ if os.path.exists(path):
     ahp['enabled'] = True
 
     # 启用微信插件（渠道配置留给岗前培训）
-    weixin = entries.setdefault('@tencent-weixin/openclaw-weixin', {})
+    weixin = entries.setdefault('openclaw-weixin', {})
     weixin['enabled'] = True
 
     # 飞书渠道默认开放 + 自动配置 App ID / App Secret
