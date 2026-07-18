@@ -32,7 +32,10 @@ echo "[1/2] SSH 连通性检查..."
 ssh-keygen -R "${IP}" 2>/dev/null || true
 ${SSH} 'echo OK $(hostname) $(whoami)' || { echo "❌ SSH 失败"; exit 1; }
 
-echo "[2/2] 派发 deploy-agent.service ..."
+echo "[2/3] 确保 ubuntu 用户存在..."
+${SSH} 'id ubuntu 2>/dev/null || (sudo useradd -m -s /bin/bash ubuntu && echo "ubuntu 用户已创建")'
+
+echo "[3/3] 派发 deploy-agent.service ..."
 
 cat > /tmp/deploy-${IP}.service << EOF
 [Unit]
