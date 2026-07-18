@@ -31,6 +31,7 @@ DS="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 export ADMIN_API DEEPSEEK_API_KEY ADMIN_API_KEY
 export CI=true
+SSH_USER="$(whoami)"
 
 IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null \
   || curl -s --connect-timeout 5 ip.sb 2>/dev/null \
@@ -45,18 +46,19 @@ log "ADMIN_API_KEY set: $([ -n "${ADMIN_API_KEY}" ] && echo yes || echo no) (len
 
 # 1. Baseline
 step "1/10 Download baseline"
-sudo rm -rf /home/ubuntu/openclaw /home/ubuntu/.openclaw 2>/dev/null || true
-sudo mkdir -p /home/ubuntu/openclaw
+sudo rm -rf /home/"${SSH_USER}"/openclaw /home/"${SSH_USER}"/.openclaw 2>/dev/null || true
+sudo mkdir -p /home/"${SSH_USER}"/openclaw
 log "curl ${DS}/openclaw-baseline.tar.gz ..."
 if ! curl -fL --connect-timeout 30 --max-time 600 "${DS}/openclaw-baseline.tar.gz" \
-  | sudo tar xzf - -C /home/ubuntu/openclaw; then
+  | sudo tar xzf - -C /home/"${SSH_USER}"/openclaw; then
   die "baseline download/extract failed from ${DS}/openclaw-baseline.tar.gz"
 fi
-sudo chown -R ubuntu:ubuntu /home/ubuntu/openclaw
-[ -f /home/ubuntu/openclaw/package.json ] || die "baseline missing package.json"
-log "baseline OK: $(du -sh /home/ubuntu/openclaw | awk '{print $1}')"
-log "dist present: $([ -f /home/ubuntu/openclaw/dist/index.js ] && echo yes || echo NO)"
-python3 -c "import json; print('package.json name/version:', json.load(open('/home/ubuntu/openclaw/package.json')).get('name'), json.load(open('/home/ubuntu/openclaw/package.json')).get('version'))" 2>/dev/null || true
+sudo chown -R "${SSH_USER}":"${SSH_USER}" /home/"${SSH_USER}"/openclaw
+[ -f /home/"${SSH_USER}"/openclaw/package.json ] || die "baseline missing package.json"
+log "baseline OK: $(du -sh /home/"${SSH_USER}"/openclaw | awk '{print $1}')"
+log "dist present: $([ -f /home/"${SSH_USER}"/openclaw/dist/index.js ] && echo yes || echo NO)"
+PKG_JSON="/home/${SSH_USER}/openclaw/package.json"
+python3 -c "import json; print('package.json name/version:', json.load(open('${PKG_JSON}')).get('name'), json.load(open('${PKG_JSON}')).get('version'))" 2>/dev/null || true
 
 # 2. System deps
 step "2/10 System deps"
@@ -108,14 +110,14 @@ command -v pnpm >/dev/null 2>&1 || die "pnpm not on PATH after install"
 step "5/10 Network / mirror"
 LATENCY=$(curl -s -o /dev/null -w "%{time_total}" --connect-timeout 5 https://registry.npmjs.org 2>/dev/null || echo 99)
 log "npmjs latency: ${LATENCY}s"
-cd /home/ubuntu/openclaw
+cd /home/"${SSH_USER}"/openclaw
 if [ "${LATENCY%%.*}" -ge 2 ] 2>/dev/null; then
   log "China network - enabling npmmirror"
-  echo "registry=https://registry.npmmirror.com" > /home/ubuntu/openclaw/.npmrc
-  mkdir -p /home/ubuntu/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs
+  echo "registry=https://registry.npmmirror.com" > /home/"${SSH_USER}"/openclaw/.npmrc
+  mkdir -p /home/"${SSH_USER}"/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs
   if curl -fL --connect-timeout 20 --max-time 120 \
     "${DS}/matrix-sdk-crypto.linux-x64-gnu.node" \
-    -o /home/ubuntu/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs/matrix-sdk-crypto.linux-x64-gnu.node \
+    -o /home/"${SSH_USER}"/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs/matrix-sdk-crypto.linux-x64-gnu.node \
     >/tmp/deploy-step.log 2>&1; then
     log "matrix-sdk binary preloaded"
   else
@@ -123,7 +125,7 @@ if [ "${LATENCY%%.*}" -ge 2 ] 2>/dev/null; then
   fi
 else
   log "npmjs OK, no mirror"
-  : > /home/ubuntu/openclaw/.npmrc
+  : > /home/"${SSH_USER}"/openclaw/.npmrc
 fi
 
 # 6. Git + patch package.json
@@ -131,13 +133,14 @@ step "6/10 Prepare package.json / git"
 git init >/dev/null 2>&1 || true
 git remote remove origin >/dev/null 2>&1 || true
 git remote add origin https://github.com/openclaw/openclaw.git >/dev/null 2>&1 || true
-git config --global --add safe.directory /home/ubuntu/openclaw >/dev/null 2>&1 || true
+git config --global --add safe.directory /home/"${SSH_USER}"/openclaw >/dev/null 2>&1 || true
 log "git remotes: $(git remote -v 2>/dev/null | tr '\n' ' ' || echo none)"
 
-python3 << 'PY'
+python3 << PY
 import json
 from pathlib import Path
-p = Path("/home/ubuntu/openclaw/package.json")
+BASE = "/home/${SSH_USER}/openclaw"
+p = Path(BASE) / "package.json"
 cfg = json.loads(p.read_text())
 pnpm_cfg = cfg.setdefault("pnpm", {})
 pnpm_cfg["allowUnusedPatches"] = True
@@ -145,7 +148,7 @@ pnpm_cfg["allowNonAppliedPatches"] = True
 
 # matrix-sdk-crypto-nodejs 0.6.1+ 支持 MATRIX_SDK_CRYPTO_DOWNLOADS_BASE_URL 环境变量
 # baseline 锁了 0.6.0，直接升级 extensions/matrix/package.json 中的精确版本
-matrix_pkg = Path("/home/ubuntu/openclaw/extensions/matrix/package.json")
+matrix_pkg = Path(BASE) / "extensions/matrix/package.json"
 if matrix_pkg.exists():
     mcfg = json.loads(matrix_pkg.read_text())
     mcfg["dependencies"]["@matrix-org/matrix-sdk-crypto-nodejs"] = "0.6.1"
@@ -171,7 +174,7 @@ step "7/10 pnpm install"
 # 覆盖 MATRIX_SDK_CRYPTO_BASE_URL 可切换镜像源
 export MATRIX_SDK_CRYPTO_DOWNLOADS_BASE_URL="${MATRIX_SDK_CRYPTO_BASE_URL:-https://training.xhl413.com/binaries}"
 
-cd /home/ubuntu/openclaw
+cd /home/"${SSH_USER}"/openclaw
 rm -f npm-shrinkwrap.json
 # 保留 pnpm-lock.yaml 若存在，仅在 install 失败时再删重试
 log "running: pnpm install (full log -> /tmp/pnpm-install.log)"
@@ -196,9 +199,9 @@ log "pnpm install OK; node_modules=$(du -sh node_modules 2>/dev/null | awk '{pri
 
 # 8. Write openclaw.json + systemd unit
 step "8/10 Write config + systemd unit"
-mkdir -p /home/ubuntu/.openclaw ~/.config/systemd/user ~/.local/bin
+mkdir -p /home/"${SSH_USER}"/.openclaw ~/.config/systemd/user ~/.local/bin
 TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-cat > /home/ubuntu/.openclaw/openclaw.json << JSONEOF
+cat > /home/"${SSH_USER}"/.openclaw/openclaw.json << JSONEOF
 {
   "gateway": {
     "mode": "local",
@@ -223,14 +226,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/ubuntu/openclaw
-ExecStart=/usr/bin/node /home/ubuntu/openclaw/dist/index.js gateway --port 18789
+WorkingDirectory=/home/${SSH_USER}/openclaw
+ExecStart=/usr/bin/node /home/${SSH_USER}/openclaw/dist/index.js gateway --port 18789
 Restart=always
 RestartSec=5
 RestartPreventExitStatus=78
-Environment=HOME=/home/ubuntu
+Environment=HOME=/home/${SSH_USER}
 Environment=TMPDIR=/tmp
-Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/ubuntu/.npm-global/bin:/home/ubuntu/.local/share/pnpm/bin:/home/ubuntu/.local/bin
+Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/${SSH_USER}/.npm-global/bin:/home/${SSH_USER}/.local/share/pnpm/bin:/home/${SSH_USER}/.local/bin
 Environment=OPENCLAW_GATEWAY_PORT=18789
 Environment=OPENCLAW_SYSTEMD_UNIT=openclaw-gateway.service
 Environment=DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
@@ -257,7 +260,7 @@ log "openclaw CLI wrapper created"
 
 # baseline 的 dist 是预构建的，需要修复 build stamp 避免 CLI 触发不必要的重建
 # 1. 将所有文件纳入 git（避免 "dirty tree" 触发重建）
-cd /home/ubuntu/openclaw
+cd /home/"${SSH_USER}"/openclaw
 git config user.email "deploy@agent.local" 2>/dev/null || true
 git config user.name "Deploy" 2>/dev/null || true
 git add -A 2>/dev/null || true
@@ -288,7 +291,7 @@ log "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
 if [ ! -d "${XDG_RUNTIME_DIR}" ]; then
   log "WARN: ${XDG_RUNTIME_DIR} missing — enabling linger and waiting"
 fi
-sudo loginctl enable-linger ubuntu 2>/dev/null || log "WARN: enable-linger failed"
+sudo loginctl enable-linger "${SSH_USER}" 2>/dev/null || log "WARN: enable-linger failed"
 # linger 后有时需要等 runtime 目录出现
 for i in 1 2 3 4 5; do
   if [ -d "${XDG_RUNTIME_DIR}" ]; then break; fi
