@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+# ============================================================
+# deploy-and-register.sh — OpenClaw Agent 部署 + 热池注册
+#
+# 必需环境变量：
+#   ADMIN_API         管理平台 API 基础 URL（例：https://ai.xhl413.com/api）
+#   DEEPSEEK_API_KEY  DeepSeek API 密钥
+#   ADMIN_API_KEY     管理平台 API 鉴权密钥
+#
+# 可选环境变量：
+#   DEPLOY_SERVER     部署文件下载源（默认 http://43.160.245.20:9900）
+#   AGENT_PROVIDER    云服务商标识（默认 Tencent）
+# ============================================================
 set -euo pipefail
 
 log()  { echo "[$(date +%H:%M:%S)] $*"; }
@@ -13,10 +25,11 @@ die()  {
 step() { log "======== $* ========"; }
 
 DS="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
-export ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
+: "${ADMIN_API:?need ADMIN_API (e.g. https://ai.xhl413.com/api)}"
 : "${DEEPSEEK_API_KEY:?need DEEPSEEK_API_KEY}"
 : "${ADMIN_API_KEY:?need ADMIN_API_KEY}"
 export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
+export ADMIN_API DEEPSEEK_API_KEY ADMIN_API_KEY
 export CI=true
 
 IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null \

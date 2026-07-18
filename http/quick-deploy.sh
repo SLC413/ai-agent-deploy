@@ -11,7 +11,8 @@ DEEPSEEK_KEY="${3:?需要 DEEPSEEK_API_KEY}"
 IP="${4:?需要 IP}"
 
 DEPLOY_SERVER="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
-ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
+: "${ADMIN_API:?need ADMIN_API (e.g. https://ai.xhl413.com/api)}"
+export ADMIN_API
 AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ubuntu@${IP}"
 

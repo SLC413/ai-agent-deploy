@@ -18,7 +18,7 @@
 set -euo pipefail
 
 TRACKER_FILE="${TRACKER_FILE:-/tmp/deploy-tracker.json}"
-ADMIN_API="${ADMIN_API:-https://www.nika8.com/api}"
+: "${ADMIN_API:?need ADMIN_API (e.g. https://ai.xhl413.com/api)}"
 ADMIN_API_KEY="${ADMIN_API_KEY:?ADMIN_API_KEY}"
 CHECK_DELAY_MINUTES="${CHECK_DELAY_MINUTES:-30}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/agent01_tencent}"
