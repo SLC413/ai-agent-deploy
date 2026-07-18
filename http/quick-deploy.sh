@@ -2,7 +2,8 @@
 set -euo pipefail
 # ============================================================
 # quick-deploy.sh — 一键部署 OpenClaw Agent 到 VPS
-# 用法: ./quick-deploy.sh <SSH_KEY> <API_KEY> <DEEPSEEK_KEY> <IP> <ADMIN_API>
+# 用法: ./quick-deploy.sh <SSH_KEY> <API_KEY> <DEEPSEEK_KEY> <IP> <ADMIN_API> [SSH_USER]
+#       第6个参数指定 SSH 用户，默认 ubuntu
 # ============================================================
 
 SSH_KEY="${1:?需要 SSH_KEY}"
@@ -13,7 +14,7 @@ IP="${4:?需要 IP}"
 DEPLOY_SERVER="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 ADMIN_API="${5:?需要 ADMIN_API (e.g. https://ai.xhl413.com/api)}"
 AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
-SSH_USER="${SSH_USER:-ubuntu}"
+SSH_USER="${6:-ubuntu}"
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${IP}"
 
 [ -f "${SSH_KEY}" ] || { echo "❌ SSH_KEY 不存在: ${SSH_KEY}"; exit 1; }
@@ -32,10 +33,7 @@ echo "[1/2] SSH 连通性检查..."
 ssh-keygen -R "${IP}" 2>/dev/null || true
 ${SSH} 'echo OK $(hostname) $(whoami)' || { echo "❌ SSH 失败"; exit 1; }
 
-echo "[2/3] 确保 ubuntu 用户存在..."
-${SSH} 'id ubuntu 2>/dev/null || (sudo useradd -m -s /bin/bash ubuntu && echo "ubuntu 用户已创建")'
-
-echo "[3/3] 派发 deploy-agent.service ..."
+echo "[2/2] 派发 deploy-agent.service ..."
 
 cat > /tmp/deploy-${IP}.service << EOF
 [Unit]
@@ -46,7 +44,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=no
-User=ubuntu
+User=${SSH_USER}
 WorkingDirectory=/tmp
 
 Environment=DEPLOY_SERVER=${DEPLOY_SERVER}
