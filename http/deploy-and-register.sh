@@ -51,7 +51,7 @@ step "1/10 Download baseline"
 sudo rm -rf "${SSH_HOME}/openclaw" "${SSH_HOME}/.openclaw" 2>/dev/null || true
 sudo mkdir -p "${SSH_HOME}/openclaw"
 log "curl ${DS}/openclaw-baseline.tar.gz ..."
-if ! curl -fL --connect-timeout 30 --max-time 600 "${DS}/openclaw-baseline.tar.gz" \
+if ! curl -fL --connect-timeout 30 --max-time 1800 "${DS}/openclaw-baseline.tar.gz" \
   | sudo tar xzf - -C "${SSH_HOME}/openclaw"; then
   die "baseline download/extract failed from ${DS}/openclaw-baseline.tar.gz"
 fi
