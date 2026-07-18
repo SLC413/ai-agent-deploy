@@ -13,7 +13,8 @@ IP="${4:?需要 IP}"
 DEPLOY_SERVER="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 ADMIN_API="${5:?需要 ADMIN_API (e.g. https://ai.xhl413.com/api)}"
 AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
-SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ubuntu@${IP}"
+SSH_USER="${SSH_USER:-ubuntu}"
+SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${IP}"
 
 [ -f "${SSH_KEY}" ] || { echo "❌ SSH_KEY 不存在: ${SSH_KEY}"; exit 1; }
 
@@ -61,13 +62,13 @@ TimeoutStartSec=1800
 WantedBy=multi-user.target
 EOF
 
-scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no /tmp/deploy-${IP}.service ubuntu@${IP}:/tmp/deploy-agent.service
+scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no /tmp/deploy-${IP}.service ${SSH_USER}@${IP}:/tmp/deploy-agent.service
 ${SSH} 'sudo mv /tmp/deploy-agent.service /etc/systemd/system/deploy-agent.service && sudo systemctl daemon-reload && sudo systemctl reset-failed deploy-agent.service 2>/dev/null; sudo systemctl start --no-block deploy-agent.service && systemctl is-active deploy-agent.service'
 rm -f /tmp/deploy-${IP}.service
 
 echo ""
 echo "✅ ${IP} 已派发 — 目标机正在自动部署+注册，可以继续下一个"
-echo "   查看日志: ssh -i ${SSH_KEY} ubuntu@${IP} 'sudo journalctl -u deploy-agent -f'"
+echo "   查看日志: ssh -i ${SSH_KEY} ${SSH_USER}@${IP} 'sudo journalctl -u deploy-agent -f'"
 
 # 记录到跟踪文件（供 patrol-register.sh 补注册）
 python3 -c "
