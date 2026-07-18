@@ -32,6 +32,7 @@ export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 export ADMIN_API DEEPSEEK_API_KEY ADMIN_API_KEY
 export CI=true
 SSH_USER="$(whoami)"
+SSH_HOME="${HOME}"
 
 IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null \
   || curl -s --connect-timeout 5 ip.sb 2>/dev/null \
@@ -46,18 +47,19 @@ log "ADMIN_API_KEY set: $([ -n "${ADMIN_API_KEY}" ] && echo yes || echo no) (len
 
 # 1. Baseline
 step "1/10 Download baseline"
-sudo rm -rf /home/"${SSH_USER}"/openclaw /home/"${SSH_USER}"/.openclaw 2>/dev/null || true
-sudo mkdir -p /home/"${SSH_USER}"/openclaw
+# 使用 SSH_HOME 而非硬编码 /home/${USER}，兼容 root（/root）等非常规家目录
+sudo rm -rf "${SSH_HOME}/openclaw" "${SSH_HOME}/.openclaw" 2>/dev/null || true
+sudo mkdir -p "${SSH_HOME}/openclaw"
 log "curl ${DS}/openclaw-baseline.tar.gz ..."
 if ! curl -fL --connect-timeout 30 --max-time 600 "${DS}/openclaw-baseline.tar.gz" \
-  | sudo tar xzf - -C /home/"${SSH_USER}"/openclaw; then
+  | sudo tar xzf - -C "${SSH_HOME}/openclaw"; then
   die "baseline download/extract failed from ${DS}/openclaw-baseline.tar.gz"
 fi
-sudo chown -R "${SSH_USER}":"${SSH_USER}" /home/"${SSH_USER}"/openclaw
-[ -f /home/"${SSH_USER}"/openclaw/package.json ] || die "baseline missing package.json"
-log "baseline OK: $(du -sh /home/"${SSH_USER}"/openclaw | awk '{print $1}')"
-log "dist present: $([ -f /home/"${SSH_USER}"/openclaw/dist/index.js ] && echo yes || echo NO)"
-PKG_JSON="/home/${SSH_USER}/openclaw/package.json"
+sudo chown -R "${SSH_USER}:${SSH_USER}" "${SSH_HOME}/openclaw"
+[ -f "${SSH_HOME}/openclaw/package.json" ] || die "baseline missing package.json"
+log "baseline OK: $(du -sh "${SSH_HOME}/openclaw" | awk '{print $1}')"
+log "dist present: $([ -f "${SSH_HOME}/openclaw/dist/index.js" ] && echo yes || echo NO)"
+PKG_JSON="${SSH_HOME}/openclaw/package.json"
 python3 -c "import json; print('package.json name/version:', json.load(open('${PKG_JSON}')).get('name'), json.load(open('${PKG_JSON}')).get('version'))" 2>/dev/null || true
 
 # 2. System deps
@@ -110,14 +112,14 @@ command -v pnpm >/dev/null 2>&1 || die "pnpm not on PATH after install"
 step "5/10 Network / mirror"
 LATENCY=$(curl -s -o /dev/null -w "%{time_total}" --connect-timeout 5 https://registry.npmjs.org 2>/dev/null || echo 99)
 log "npmjs latency: ${LATENCY}s"
-cd /home/"${SSH_USER}"/openclaw
+cd "${SSH_HOME}/openclaw"
 if [ "${LATENCY%%.*}" -ge 2 ] 2>/dev/null; then
   log "China network - enabling npmmirror"
-  echo "registry=https://registry.npmmirror.com" > /home/"${SSH_USER}"/openclaw/.npmrc
-  mkdir -p /home/"${SSH_USER}"/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs
+  echo "registry=https://registry.npmmirror.com" > "${SSH_HOME}/openclaw/.npmrc"
+  mkdir -p "${SSH_HOME}/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs"
   if curl -fL --connect-timeout 20 --max-time 120 \
     "${DS}/matrix-sdk-crypto.linux-x64-gnu.node" \
-    -o /home/"${SSH_USER}"/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs/matrix-sdk-crypto.linux-x64-gnu.node \
+    -o "${SSH_HOME}/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs/matrix-sdk-crypto.linux-x64-gnu.node" \
     >/tmp/deploy-step.log 2>&1; then
     log "matrix-sdk binary preloaded"
   else
@@ -125,7 +127,7 @@ if [ "${LATENCY%%.*}" -ge 2 ] 2>/dev/null; then
   fi
 else
   log "npmjs OK, no mirror"
-  : > /home/"${SSH_USER}"/openclaw/.npmrc
+  : > "${SSH_HOME}/openclaw/.npmrc"
 fi
 
 # 6. Git + patch package.json
@@ -133,13 +135,13 @@ step "6/10 Prepare package.json / git"
 git init >/dev/null 2>&1 || true
 git remote remove origin >/dev/null 2>&1 || true
 git remote add origin https://github.com/openclaw/openclaw.git >/dev/null 2>&1 || true
-git config --global --add safe.directory /home/"${SSH_USER}"/openclaw >/dev/null 2>&1 || true
+git config --global --add safe.directory "${SSH_HOME}/openclaw" >/dev/null 2>&1 || true
 log "git remotes: $(git remote -v 2>/dev/null | tr '\n' ' ' || echo none)"
 
 python3 << PY
 import json
 from pathlib import Path
-BASE = "/home/${SSH_USER}/openclaw"
+BASE = "${SSH_HOME}/openclaw"
 p = Path(BASE) / "package.json"
 cfg = json.loads(p.read_text())
 pnpm_cfg = cfg.setdefault("pnpm", {})
@@ -174,7 +176,7 @@ step "7/10 pnpm install"
 # 覆盖 MATRIX_SDK_CRYPTO_BASE_URL 可切换镜像源
 export MATRIX_SDK_CRYPTO_DOWNLOADS_BASE_URL="${MATRIX_SDK_CRYPTO_BASE_URL:-https://training.xhl413.com/binaries}"
 
-cd /home/"${SSH_USER}"/openclaw
+cd "${SSH_HOME}/openclaw"
 rm -f npm-shrinkwrap.json
 # 保留 pnpm-lock.yaml 若存在，仅在 install 失败时再删重试
 log "running: pnpm install (full log -> /tmp/pnpm-install.log)"
@@ -199,9 +201,9 @@ log "pnpm install OK; node_modules=$(du -sh node_modules 2>/dev/null | awk '{pri
 
 # 8. Write openclaw.json + systemd unit
 step "8/10 Write config + systemd unit"
-mkdir -p /home/"${SSH_USER}"/.openclaw ~/.config/systemd/user ~/.local/bin
+mkdir -p "${SSH_HOME}/.openclaw" ~/.config/systemd/user ~/.local/bin
 TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-cat > /home/"${SSH_USER}"/.openclaw/openclaw.json << JSONEOF
+cat > "${SSH_HOME}/.openclaw/openclaw.json" << JSONEOF
 {
   "gateway": {
     "mode": "local",
@@ -226,14 +228,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/${SSH_USER}/openclaw
-ExecStart=/usr/bin/node /home/${SSH_USER}/openclaw/dist/index.js gateway --port 18789
+WorkingDirectory=${SSH_HOME}/openclaw
+ExecStart=/usr/bin/node ${SSH_HOME}/openclaw/dist/index.js gateway --port 18789
 Restart=always
 RestartSec=5
 RestartPreventExitStatus=78
-Environment=HOME=/home/${SSH_USER}
+Environment=HOME=${SSH_HOME}
 Environment=TMPDIR=/tmp
-Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/${SSH_USER}/.npm-global/bin:/home/${SSH_USER}/.local/share/pnpm/bin:/home/${SSH_USER}/.local/bin
+Environment=PATH=/usr/bin:/usr/local/bin:/bin:${SSH_HOME}/.npm-global/bin:${SSH_HOME}/.local/share/pnpm/bin:${SSH_HOME}/.local/bin
 Environment=OPENCLAW_GATEWAY_PORT=18789
 Environment=OPENCLAW_SYSTEMD_UNIT=openclaw-gateway.service
 Environment=DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
@@ -260,7 +262,7 @@ log "openclaw CLI wrapper created"
 
 # baseline 的 dist 是预构建的，需要修复 build stamp 避免 CLI 触发不必要的重建
 # 1. 将所有文件纳入 git（避免 "dirty tree" 触发重建）
-cd /home/"${SSH_USER}"/openclaw
+cd "${SSH_HOME}/openclaw"
 git config user.email "deploy@agent.local" 2>/dev/null || true
 git config user.name "Deploy" 2>/dev/null || true
 git add -A 2>/dev/null || true

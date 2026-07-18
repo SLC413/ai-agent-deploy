@@ -96,8 +96,8 @@ for i, record in enumerate(tracker):
         if gw_running:
             r = subprocess.run(
                 ssh_cmd + [
-                    'python3 -c "import json; '
-                    "print(json.load(open('/home/ubuntu/.openclaw/openclaw.json'))"
+                    'python3 -c "import json,os; '
+                    "print(json.load(os.path.expanduser('~/.openclaw/openclaw.json'))"
                     "['gateway']['auth']['token'])\""
                 ],
                 capture_output=True, text=True, timeout=10,

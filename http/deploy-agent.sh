@@ -17,8 +17,9 @@ IP="${1:?缺少 IP}"
 SSH_KEY="${2:?缺少 SSH 私钥路径}"
 DEEPSEEK_KEY="${3:?缺少 DeepSeek API Key}"
 NAME="${4:-agent-${IP##*.}}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${IP}"
-BASELINE="/home/ubuntu/ai-agent-deploy/openclaw-baseline.tar.gz"
+BASELINE="${SCRIPT_DIR}/../openclaw-baseline.tar.gz"
 SCRIPT_URL="https://raw.githubusercontent.com/BIDXOM/setup-openclaw-ubuntu/refs/heads/main/setup-openclaw-ubuntu.sh"
 
 echo -e "\n=========================================="
@@ -44,15 +45,15 @@ log "   基线: $(ls -lh ${BASELINE} | awk '{print $5}')"
 
 # ═══ 1. PUSH BASELINE ═══
 log "1. 推送源码"
-${SSH} 'sudo rm -rf /home/ubuntu/openclaw ~/.openclaw 2>/dev/null; mkdir -p /home/ubuntu/openclaw'
-cat ${BASELINE} | ${SSH} 'tar xzf - -C /home/ubuntu/openclaw'
+${SSH} 'sudo rm -rf ~/openclaw ~/.openclaw 2>/dev/null; mkdir -p ~/openclaw'
+cat ${BASELINE} | ${SSH} 'tar xzf - -C ~/openclaw'
 ${SSH} 'cd ~/openclaw && git init && git remote add origin https://github.com/openclaw/openclaw.git' 2>/dev/null
 log "   已部署"
 
 # ═══ 2. INJECT .NPMRC (国内镜像加速) ═══
 log "2. 检测网络 + 优化..."
 NPM_LATENCY=$(${SSH} 'curl -s -o /dev/null -w "%{time_total}" --connect-timeout 5 https://registry.npmjs.org 2>/dev/null || echo 99')
-MATRIX_BIN="/home/ubuntu/ai-agent-deploy/binaries/matrix-sdk-crypto.linux-x64-gnu.node"
+MATRIX_BIN="${SCRIPT_DIR}/../binaries/matrix-sdk-crypto.linux-x64-gnu.node"
 
 if [ "$(echo "${NPM_LATENCY} > 2" | bc -l 2>/dev/null || echo 0)" = "1" ] || [ "${NPM_LATENCY%%.*}" -ge 2 ]; then
   warn "   npmjs 延迟 ${NPM_LATENCY}s → 启用 npmmirror 镜像"
@@ -66,7 +67,7 @@ NPMRC'
     log "   matrix-sdk 二进制已预置(只读)"
   fi
   # 推送本地缓存的部署脚本；缺失则回退 GitHub
-  LOCAL_SCRIPT="/home/ubuntu/ai-agent-deploy/http/setup-openclaw-ubuntu.sh"
+  LOCAL_SCRIPT="${SCRIPT_DIR}/setup-openclaw-ubuntu.sh"
   if [ -f "${LOCAL_SCRIPT}" ]; then
     scp -q -i ${SSH_KEY} -o StrictHostKeyChecking=no "${LOCAL_SCRIPT}" ubuntu@${IP}:/tmp/setup-openclaw.sh 2>/dev/null || true
   fi
@@ -103,7 +104,7 @@ cd ~/openclaw && CI=true ~/.npm-global/bin/pnpm approve-builds node-pty 2>/dev/n
 # systemd PATH
 S=~/.config/systemd/user/openclaw-gateway.service
 if [ -f "$S" ] && ! grep -q "npm-global/bin" "$S"; then
-  sed -i "s|Environment=PATH=.*|Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/ubuntu/.npm-global/bin:/home/ubuntu/.local/share/pnpm/bin:/home/ubuntu/.local/bin:/home/ubuntu/bin|" "$S"
+  sed -i "s|Environment=PATH=.*|Environment=PATH=/usr/bin:/usr/local/bin:/bin:${HOME}/.npm-global/bin:${HOME}/.local/share/pnpm/bin:${HOME}/.local/bin:${HOME}/bin|" "$S"
 fi
 
 # API Key
