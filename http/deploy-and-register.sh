@@ -50,11 +50,15 @@ step "1/10 Download baseline"
 # 使用 SSH_HOME 而非硬编码 /home/${USER}，兼容 root（/root）等非常规家目录
 sudo rm -rf "${SSH_HOME}/openclaw" "${SSH_HOME}/.openclaw" 2>/dev/null || true
 sudo mkdir -p "${SSH_HOME}/openclaw"
-log "curl ${DS}/openclaw-baseline.tar.gz ..."
-if ! curl -fL --connect-timeout 30 --max-time 1800 "${DS}/openclaw-baseline.tar.gz" \
-  | sudo tar xzf - -C "${SSH_HOME}/openclaw"; then
-  die "baseline download/extract failed from ${DS}/openclaw-baseline.tar.gz"
+log "下载 baseline (~138MB) ..."
+if ! curl -# -fL --connect-timeout 30 --max-time 1800 \
+    "${DS}/openclaw-baseline.tar.gz" \
+    -o /tmp/openclaw-baseline.tar.gz; then
+  die "baseline download failed from ${DS}/openclaw-baseline.tar.gz"
 fi
+log "解压..."
+sudo tar xzf /tmp/openclaw-baseline.tar.gz -C "${SSH_HOME}/openclaw"
+rm -f /tmp/openclaw-baseline.tar.gz
 sudo chown -R "${SSH_USER}:${SSH_USER}" "${SSH_HOME}/openclaw"
 [ -f "${SSH_HOME}/openclaw/package.json" ] || die "baseline missing package.json"
 log "baseline OK: $(du -sh "${SSH_HOME}/openclaw" | awk '{print $1}')"
