@@ -64,6 +64,25 @@ python3 -c "import json; print('package.json name/version:', json.load(open('${P
 
 # 2. System deps
 step "2/10 System deps"
+
+# 等待 apt 锁释放（最多等 5 分钟）
+for i in $(seq 1 30); do
+  if sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+    log "等待 apt 锁释放 (${i}/30)..."
+    sleep 10
+  else
+    break
+  fi
+done
+
+# 如果还是锁着的，杀掉 unattended-upgrades
+if sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+  log "强制释放 apt 锁..."
+  sudo kill -9 "$(sudo fuser /var/lib/dpkg/lock-frontend 2>/dev/null | tr -d ' ')" 2>/dev/null || true
+  sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
+  sudo dpkg --configure -a 2>/dev/null || true
+fi
+
 sudo apt-get update -qq 2>/dev/null || log "WARN: apt-get update failed (continuing)"
 sudo apt-get install -y -qq curl git ca-certificates gnupg unzip python3 jq build-essential \
   >/tmp/deploy-step.log 2>&1 || die "apt-get install failed"
