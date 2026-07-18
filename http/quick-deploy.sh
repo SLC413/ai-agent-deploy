@@ -2,8 +2,10 @@
 set -euo pipefail
 # ============================================================
 # quick-deploy.sh — 一键部署 OpenClaw Agent 到 VPS
-# 用法: ./quick-deploy.sh <SSH_KEY> <API_KEY> <DEEPSEEK_KEY> <IP> <ADMIN_API> [SSH_USER]
+# 用法: ./quick-deploy.sh <SSH_KEY> <API_KEY> <DEEPSEEK_KEY> <IP> <ADMIN_API> [SSH_USER] [DEPLOY_SERVER]
 #       第6个参数指定 SSH 用户，默认 ubuntu
+#       第7个参数指定部署服务器地址，默认 http://43.160.245.20:9900（海外新加坡，适合新/港/日机器）
+#       国内机器请传 http://114.55.227.23:9900（小火龙）
 # ============================================================
 
 SSH_KEY="${1:?需要 SSH_KEY}"
@@ -11,10 +13,10 @@ API_KEY="${2:?需要 API_KEY}"
 DEEPSEEK_KEY="${3:?需要 DEEPSEEK_API_KEY}"
 IP="${4:?需要 IP}"
 
-DEPLOY_SERVER="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 ADMIN_API="${5:?需要 ADMIN_API (e.g. https://ai.xhl413.com/api)}"
-AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 SSH_USER="${6:-ubuntu}"
+DEPLOY_SERVER="${7:-http://43.160.245.20:9900}"
+AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 SSH="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${IP}"
 
 [ -f "${SSH_KEY}" ] || { echo "❌ SSH_KEY 不存在: ${SSH_KEY}"; exit 1; }
