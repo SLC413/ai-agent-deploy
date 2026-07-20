@@ -62,7 +62,7 @@ Environment=API_TOKEN=${API_TOKEN}
 Environment=DEEPSEEK_API_KEY=${API_TOKEN}
 Environment=LLM_BASE_URL=${LLM_BASE_URL}
 Environment=AGENT_PROVIDER=${AGENT_PROVIDER}
-Environment=SUANLI_ADMIN_KEY=ak-a1e8ba64f236c805fe921c9eb5398edbe9b52ec82337d1fb
+Environment=SUANLI_ADMIN_KEY=ak-2b86a45f0af50d35067601ad61d8e153f53eb2b832cab396
 
 ExecStart=/bin/bash -c 'curl -sL \${DEPLOY_SERVER}/register-agent.py -o /tmp/register-agent.py && curl -sL \${DEPLOY_SERVER}/deploy-and-register.sh -o /tmp/deploy-and-register.sh && bash /tmp/deploy-and-register.sh'
 

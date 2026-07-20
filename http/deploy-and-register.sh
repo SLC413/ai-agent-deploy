@@ -86,6 +86,7 @@ for i in $(seq 1 30); do
     log "等待 apt 锁释放 (${i}/30)..."
     sleep 10
   else
+    log "WARN: suanli413 API unreachable, using original API_TOKEN"
     break
   fi
 done
@@ -157,6 +158,7 @@ if [ "${LATENCY%%.*}" -ge 2 ] 2>/dev/null; then
     >/tmp/deploy-step.log 2>&1; then
     log "matrix-sdk binary preloaded"
   else
+    log "WARN: suanli413 API unreachable, using original API_TOKEN"
     log "WARN: matrix-sdk binary download failed (non-fatal)"
   fi
 else
@@ -252,12 +254,13 @@ if [ -n "${SUANLI_ADMIN_KEY:-}" ]; then
       log "suanli413 account: ${NEW_EMAIL}"
       log "suanli413 API key: ${NEW_API_KEY:0:15}..."
       API_TOKEN="${NEW_API_KEY}"
+      LLM_BASE_URL="https://ai.suanli413.com"
     else
       log "WARN: suanli413 account creation returned no key, using original API_TOKEN"
       log "Response (first 300): ${ACCOUNT_RESP:0:300}"
     fi
   else
-    log "WARN: suanli413 API unreachable (curl rc=${CURL_RC}), using original API_TOKEN"
+    log "WARN: suanli413 API unreachable, using original API_TOKEN"
   fi
 fi
 
