@@ -36,6 +36,8 @@ API_TOKEN="${API_TOKEN:-${DEEPSEEK_API_KEY:-}}"
 : "${API_TOKEN:?need API_TOKEN 或 DEEPSEEK_API_KEY}"
 
 LLM_BASE_URL="${LLM_BASE_URL:-https://api.deepseek.com}"
+# Ensure /v1 suffix: OpenClaw appends /chat/completions to baseUrl
+[[ "${LLM_BASE_URL}" != */v1 ]] && LLM_BASE_URL="${LLM_BASE_URL%/}/v1"
 export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 export ADMIN_API API_TOKEN LLM_BASE_URL ADMIN_API_KEY
 export CI=true
@@ -253,7 +255,7 @@ if [ -n "${SUANLI_ADMIN_KEY:-}" ]; then
       log "suanli413 account: ${NEW_EMAIL}"
       log "suanli413 API key: ${NEW_API_KEY:0:15}..."
       API_TOKEN="${NEW_API_KEY}"
-      LLM_BASE_URL="https://ai.suanli413.com"
+      LLM_BASE_URL="https://ai.suanli413.com/v1"
     else
       log "WARN: suanli413 account creation returned no key, using original API_TOKEN"
       log "Response (first 300): ${ACCOUNT_RESP:0:300}"
