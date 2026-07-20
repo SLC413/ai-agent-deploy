@@ -101,6 +101,7 @@ fi
 
 sudo apt-get update -qq 2>/dev/null || log "WARN: apt-get update failed (continuing)"
 sudo apt-get install -y -qq curl git ca-certificates gnupg unzip python3 jq build-essential \
+sudo update-ca-certificates -f 2>/dev/null || true
   >/tmp/deploy-step.log 2>&1 || die "apt-get install failed"
 log "Deps OK"
 
@@ -241,7 +242,7 @@ if [ -n "${SUANLI_ADMIN_KEY:-}" ]; then
   SUANLI_INITIAL_TOKENS="${SUANLI_INITIAL_TOKENS:-30000000000}"
   log "Creating suanli413 account (initial_tokens=${SUANLI_INITIAL_TOKENS})..."
   set +e
-  ACCOUNT_RESP=$(curl -s --connect-timeout 10 -X POST https://ai.suanli413.com/api/admin/accounts \
+  ACCOUNT_RESP=$(curl -sk --connect-timeout 10 -X POST https://ai.suanli413.com/api/admin/accounts \
     -H "Authorization: Bearer ${SUANLI_ADMIN_KEY}" \
     -H "Content-Type: application/json" \
     -d "{\"label\":\"pool-agent-${IP}\",\"initial_tokens\":${SUANLI_INITIAL_TOKENS}}")
