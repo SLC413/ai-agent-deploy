@@ -233,6 +233,34 @@ fi
 [ -f dist/index.js ] || die "dist/index.js missing — baseline 不完整，无法启动 gateway"
 log "pnpm install OK; node_modules=$(du -sh node_modules 2>/dev/null | awk '{print $1}')"
 
+# 7.5 Create suanli413 dedicated account + API key (if SUANLI_ADMIN_KEY is set)
+if [ -n "${SUANLI_ADMIN_KEY:-}" ] && [[ "${LLM_BASE_URL}" == *suanli413* ]]; then
+  step "7.5/10 Create suanli413 account"
+  SUANLI_INITIAL_TOKENS="${SUANLI_INITIAL_TOKENS:-30000000000}"
+  log "Creating suanli413 account (initial_tokens=${SUANLI_INITIAL_TOKENS})..."
+  set +e
+  ACCOUNT_RESP=$(curl -s --connect-timeout 10 -X POST https://suanli413.com/api/admin/accounts \
+    -H "Authorization: Bearer ${SUANLI_ADMIN_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{\"label\":\"pool-agent-${IP}\",\"initial_tokens\":${SUANLI_INITIAL_TOKENS}}")
+  CURL_RC=$?
+  set -e
+  if [ "$CURL_RC" -eq 0 ]; then
+    NEW_API_KEY=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('api_key',{}).get('full_key',''))" 2>/dev/null)
+    if [ -n "${NEW_API_KEY}" ]; then
+      NEW_EMAIL=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user',{}).get('email',''))" 2>/dev/null)
+      log "suanli413 account: ${NEW_EMAIL}"
+      log "suanli413 API key: ${NEW_API_KEY:0:15}..."
+      API_TOKEN="${NEW_API_KEY}"
+    else
+      log "WARN: suanli413 account creation returned no key, using original API_TOKEN"
+      log "Response (first 300): ${ACCOUNT_RESP:0:300}"
+    fi
+  else
+    log "WARN: suanli413 API unreachable (curl rc=${CURL_RC}), using original API_TOKEN"
+  fi
+fi
+
 # 8. Write openclaw.json + systemd unit
 step "8/10 Write config + systemd unit"
 mkdir -p "${SSH_HOME}/.openclaw" ~/.config/systemd/user ~/.local/bin
