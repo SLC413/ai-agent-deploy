@@ -234,7 +234,7 @@ fi
 log "pnpm install OK; node_modules=$(du -sh node_modules 2>/dev/null | awk '{print $1}')"
 
 # 7.5 Create suanli413 dedicated account + API key (if SUANLI_ADMIN_KEY is set)
-if [ -n "${SUANLI_ADMIN_KEY:-}" ] && [[ "${LLM_BASE_URL}" == *suanli413* ]]; then
+if [ -n "${SUANLI_ADMIN_KEY:-}" ]; then
   step "7.5/10 Create suanli413 account"
   SUANLI_INITIAL_TOKENS="${SUANLI_INITIAL_TOKENS:-30000000000}"
   log "Creating suanli413 account (initial_tokens=${SUANLI_INITIAL_TOKENS})..."
