@@ -86,7 +86,6 @@ for i in $(seq 1 30); do
     log "等待 apt 锁释放 (${i}/30)..."
     sleep 10
   else
-    log "WARN: suanli413 API unreachable, using original API_TOKEN"
     break
   fi
 done
@@ -101,8 +100,8 @@ fi
 
 sudo apt-get update -qq 2>/dev/null || log "WARN: apt-get update failed (continuing)"
 sudo apt-get install -y -qq curl git ca-certificates gnupg unzip python3 jq build-essential \
-sudo update-ca-certificates -f 2>/dev/null || true
   >/tmp/deploy-step.log 2>&1 || die "apt-get install failed"
+sudo update-ca-certificates -f 2>/dev/null || true
 log "Deps OK"
 
 # 3. Swap
@@ -159,7 +158,6 @@ if [ "${LATENCY%%.*}" -ge 2 ] 2>/dev/null; then
     >/tmp/deploy-step.log 2>&1; then
     log "matrix-sdk binary preloaded"
   else
-    log "WARN: suanli413 API unreachable, using original API_TOKEN"
     log "WARN: matrix-sdk binary download failed (non-fatal)"
   fi
 else
@@ -261,7 +259,7 @@ if [ -n "${SUANLI_ADMIN_KEY:-}" ]; then
       log "Response (first 300): ${ACCOUNT_RESP:0:300}"
     fi
   else
-    log "WARN: suanli413 API unreachable, using original API_TOKEN"
+    log "WARN: suanli413 API unreachable (curl rc=${CURL_RC}), using original API_TOKEN"
   fi
 fi
 
