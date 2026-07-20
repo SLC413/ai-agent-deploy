@@ -4,12 +4,15 @@
 #
 # 必需环境变量：
 #   ADMIN_API         管理平台 API 基础 URL（例：https://ai.xhl413.com/api）
-#   DEEPSEEK_API_KEY  DeepSeek API 密钥
+#   API_TOKEN         API 令牌（DeepSeek Key 或算力平台 Key）
 #   ADMIN_API_KEY     管理平台 API 鉴权密钥
 #
 # 可选环境变量：
 #   DEPLOY_SERVER     部署文件下载源（默认 http://43.160.245.20:9900）
 #   AGENT_PROVIDER    云服务商标识（默认 Tencent）
+#   LLM_BASE_URL      LLM Base URL（默认 https://api.deepseek.com）
+#
+# 向后兼容：如果只设了 DEEPSEEK_API_KEY 没设 API_TOKEN，自动从 DEEPSEEK_API_KEY 读取
 # ============================================================
 set -euo pipefail
 
@@ -26,10 +29,15 @@ step() { log "======== $* ========"; }
 
 DS="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 : "${ADMIN_API:?need ADMIN_API (e.g. https://ai.xhl413.com/api)}"
-: "${DEEPSEEK_API_KEY:?need DEEPSEEK_API_KEY}"
 : "${ADMIN_API_KEY:?need ADMIN_API_KEY}"
+
+# API_TOKEN 优先读取，fallback 到 DEEPSEEK_API_KEY 保持向后兼容
+API_TOKEN="${API_TOKEN:-${DEEPSEEK_API_KEY:-}}"
+: "${API_TOKEN:?need API_TOKEN 或 DEEPSEEK_API_KEY}"
+
+LLM_BASE_URL="${LLM_BASE_URL:-https://api.deepseek.com}"
 export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
-export ADMIN_API DEEPSEEK_API_KEY ADMIN_API_KEY
+export ADMIN_API API_TOKEN LLM_BASE_URL ADMIN_API_KEY
 export CI=true
 SSH_USER="$(whoami)"
 SSH_HOME="${HOME}"
@@ -42,7 +50,8 @@ log "Public IP: ${IP}"
 log "DEPLOY_SERVER: ${DS}"
 log "ADMIN_API: ${ADMIN_API}"
 log "AGENT_PROVIDER: ${AGENT_PROVIDER}"
-log "DEEPSEEK_API_KEY set: $([ -n "${DEEPSEEK_API_KEY}" ] && echo yes || echo no) (len=${#DEEPSEEK_API_KEY})"
+log "LLM_BASE_URL: ${LLM_BASE_URL}"
+log "API_TOKEN set: $([ -n "${API_TOKEN}" ] && echo yes || echo no) (len=${#API_TOKEN})"
 log "ADMIN_API_KEY set: $([ -n "${ADMIN_API_KEY}" ] && echo yes || echo no) (len=${#ADMIN_API_KEY})"
 
 # 1. Baseline
@@ -261,9 +270,9 @@ Environment=TMPDIR=/tmp
 Environment=PATH=/usr/bin:/usr/local/bin:/bin:${SSH_HOME}/.npm-global/bin:${SSH_HOME}/.local/share/pnpm/bin:${SSH_HOME}/.local/bin
 Environment=OPENCLAW_GATEWAY_PORT=18789
 Environment=OPENCLAW_SYSTEMD_UNIT=openclaw-gateway.service
-Environment=DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-Environment=OPENAI_API_KEY=${DEEPSEEK_API_KEY}
-Environment=OPENAI_BASE_URL=https://api.deepseek.com
+Environment=DEEPSEEK_API_KEY=${API_TOKEN}
+Environment=OPENAI_API_KEY=${API_TOKEN}
+Environment=OPENAI_BASE_URL=${LLM_BASE_URL}
 Environment=OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1
 
 [Install]
