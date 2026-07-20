@@ -36,6 +36,8 @@ API_TOKEN="${API_TOKEN:-${DEEPSEEK_API_KEY:-}}"
 : "${API_TOKEN:?need API_TOKEN 或 DEEPSEEK_API_KEY}"
 
 LLM_BASE_URL="${LLM_BASE_URL:-https://api.deepseek.com}"
+# Ensure /v1 suffix: OpenClaw appends /chat/completions to baseUrl
+[[ "${LLM_BASE_URL}" != */v1 ]] && LLM_BASE_URL="${LLM_BASE_URL%/}/v1"
 export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 export ADMIN_API API_TOKEN LLM_BASE_URL ADMIN_API_KEY
 export CI=true
@@ -245,6 +247,7 @@ cat > "${SSH_HOME}/.openclaw/openclaw.json" << JSONEOF
     "http": { "endpoints": { "chatCompletions": { "enabled": true } } }
   },
   "plugins": { "entries": { "admin-http-rpc": { "enabled": true }, "openclaw-weixin": { "enabled": true } } },
+  "models": { "providers": { "deepseek": { "apiKey": "${API_TOKEN}", "baseUrl": "${LLM_BASE_URL}" } } },
   "agents": { "defaults": { "model": { "primary": "deepseek/deepseek-v4-flash" }, "reasoningDefault": "off", "thinkingDefault": "off" } },
   "meta": { "lastTouchedVersion": "2026.6.11" },
   "wizard": { "lastRunVersion": "2026.6.11" }
