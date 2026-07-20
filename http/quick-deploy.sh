@@ -8,7 +8,7 @@ set -euo pipefail
 #       第7个参数指定部署服务器地址，默认 http://43.160.245.20:9900（海外新加坡，适合新/港/日机器）
 #       国内机器请传 http://114.55.227.23:9900（小火龙）
 #       第8个参数指定 LLM Base URL，可选。不传默认 https://api.deepseek.com
-#       传算力平台 Key 时请传 https://suanli413.com
+#       传算力平台 Key 时请传 https://ai.suanli413.com
 # ============================================================
 
 SSH_KEY="${1:?需要 SSH_KEY}"
@@ -62,7 +62,7 @@ Environment=API_TOKEN=${API_TOKEN}
 Environment=DEEPSEEK_API_KEY=${API_TOKEN}
 Environment=LLM_BASE_URL=${LLM_BASE_URL}
 Environment=AGENT_PROVIDER=${AGENT_PROVIDER}
-Environment=SUANLI_ADMIN_KEY=ak-329ebc4dba35c5070c5c54d4aeabc9b9118815bd4e1870af
+Environment=SUANLI_ADMIN_KEY=ak-a1e8ba64f236c805fe921c9eb5398edbe9b52ec82337d1fb
 
 ExecStart=/bin/bash -c 'curl -sL \${DEPLOY_SERVER}/register-agent.py -o /tmp/register-agent.py && curl -sL \${DEPLOY_SERVER}/deploy-and-register.sh -o /tmp/deploy-and-register.sh && bash /tmp/deploy-and-register.sh'
 
