@@ -36,8 +36,6 @@ API_TOKEN="${API_TOKEN:-${DEEPSEEK_API_KEY:-}}"
 : "${API_TOKEN:?need API_TOKEN 或 DEEPSEEK_API_KEY}"
 
 LLM_BASE_URL="${LLM_BASE_URL:-https://api.deepseek.com}"
-# Ensure /v1 suffix: OpenClaw appends /chat/completions to baseUrl
-[[ "${LLM_BASE_URL}" != */v1 ]] && LLM_BASE_URL="${LLM_BASE_URL%/}/v1"
 export AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 export ADMIN_API API_TOKEN LLM_BASE_URL ADMIN_API_KEY
 export CI=true
