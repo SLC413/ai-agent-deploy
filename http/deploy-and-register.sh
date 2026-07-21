@@ -260,6 +260,8 @@ else
     die "suanli413 account creation returned no API key"
   fi
   NEW_EMAIL=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user',{}).get('email',''))" 2>/dev/null)
+  COMPUTE_USER_ID=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user',{}).get('id',''))" 2>/dev/null)
+  export COMPUTE_USER_ID
   log "suanli413 account: ${NEW_EMAIL}"
   log "suanli413 API key: ${NEW_API_KEY:0:15}..."
   API_TOKEN="${NEW_API_KEY}"
