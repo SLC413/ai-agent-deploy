@@ -410,7 +410,7 @@ if [ ! -f /tmp/register-agent.py ]; then
   curl -fL "${DS}/register-agent.py" -o /tmp/register-agent.py || die "cannot download register-agent.py"
 fi
 set +e
-REGISTER_LOCAL=1 python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$PUBLIC_IP" "$AGENT_PROVIDER"
+REGISTER_LOCAL=1 COMPUTE_EMAIL="agent_${IP}@auto.suanli413.com" python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$PUBLIC_IP" "$AGENT_PROVIDER"
 REG_RC=$?
 set -e
 if [ "$REG_RC" -eq 0 ]; then

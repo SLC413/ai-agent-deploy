@@ -88,6 +88,7 @@ r = subprocess.run([
         'serverIp': ip,
         'serverProvider': provider,
         'skipConnectivityCheck': True,
+        'computeEmail': os.environ.get('COMPUTE_EMAIL', ''),
     }),
 ], capture_output=True, text=True, timeout=30)
 
