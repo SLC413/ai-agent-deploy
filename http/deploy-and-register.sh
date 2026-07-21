@@ -207,18 +207,17 @@ step "7/10 pnpm install"
 
 cd "${SSH_HOME}/openclaw"
 rm -f npm-shrinkwrap.json
-# 保留 pnpm-lock.yaml 若存在，仅在 install 失败时再删重试
-log "running: pnpm install (full log -> /tmp/pnpm-install.log)"
+# --no-frozen-lockfile 覆盖 CI=true 的默认行为，允许增量更新 lockfile
+log "running: pnpm install --no-frozen-lockfile (full log -> /tmp/pnpm-install.log)"
 set +e
-pnpm install > /tmp/pnpm-install.log 2>&1
+pnpm install --no-frozen-lockfile > /tmp/pnpm-install.log 2>&1
 PNPM_RC=$?
 set -e
 tail -30 /tmp/pnpm-install.log || true
 if [ "$PNPM_RC" -ne 0 ] || [ ! -d node_modules ]; then
-  log "WARN: pnpm install failed (rc=${PNPM_RC}), retry without lockfile..."
-  rm -f pnpm-lock.yaml npm-shrinkwrap.json
+  log "WARN: pnpm install failed (rc=${PNPM_RC}), retry once..."
   set +e
-  pnpm install > /tmp/pnpm-install.log 2>&1
+  pnpm install --no-frozen-lockfile > /tmp/pnpm-install.log 2>&1
   PNPM_RC=$?
   set -e
   tail -30 /tmp/pnpm-install.log || true
