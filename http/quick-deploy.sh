@@ -3,7 +3,8 @@ set -euo pipefail
 # ============================================================
 # quick-deploy.sh — 一键部署 OpenClaw Agent 到 VPS
 # 用法: ./quick-deploy.sh --ssh-key <path> --api-key <key> --ip <ip> --admin-api <url> \
-#           [--apitoken <token>] [--ssh-user <user>] [--deploy-server <url>] [--llm-base-url <url>]
+#           [--apitoken <token>] [--ssh-user <user>] [--deploy-server <url>] \
+#           [--llm-base-url <url>] [--suanli-admin-key <key>]
 #
 # 必需参数：
 #   --ssh-key          SSH 私钥路径
@@ -18,6 +19,7 @@ set -euo pipefail
 #                      国内机器建议用 http://114.55.227.23:9900
 #   --llm-base-url     LLM Base URL（默认 https://api.deepseek.com）
 #                      用算力平台 Key 时传 https://ai.suanli413.com
+#   --suanli-admin-key 算力平台 Admin Key（不传则使用内置默认值）
 # ============================================================
 
 # --- Parse named arguments ---
@@ -29,11 +31,13 @@ ADMIN_API=""
 SSH_USER="ubuntu"
 DEPLOY_SERVER="http://43.160.245.20:9900"
 LLM_BASE_URL="https://api.deepseek.com"
+SUANLI_ADMIN_KEY="ak-2b86a45f0af50d35067601ad61d8e153f53eb2b832cab396"
 AGENT_PROVIDER="${AGENT_PROVIDER:-Tencent}"
 
 usage() {
   echo "用法: $0 --ssh-key <path> --api-key <key> --ip <ip> --admin-api <url>"
-  echo "            [--apitoken <token>] [--ssh-user <user>] [--deploy-server <url>] [--llm-base-url <url>]"
+  echo "            [--apitoken <token>] [--ssh-user <user>] [--deploy-server <url>]"
+  echo "            [--llm-base-url <url>] [--suanli-admin-key <key>]"
   exit 1
 }
 
@@ -46,8 +50,9 @@ while [ $# -gt 0 ]; do
     --admin-api)     ADMIN_API="${2:?--admin-api requires a value}"; shift 2 ;;
     --ssh-user)      SSH_USER="${2:?--ssh-user requires a value}"; shift 2 ;;
     --deploy-server) DEPLOY_SERVER="${2:?--deploy-server requires a value}"; shift 2 ;;
-    --llm-base-url)  LLM_BASE_URL="${2:?--llm-base-url requires a value}"; shift 2 ;;
-    -h|--help)       usage ;;
+    --llm-base-url)      LLM_BASE_URL="${2:?--llm-base-url requires a value}"; shift 2 ;;
+    --suanli-admin-key)  SUANLI_ADMIN_KEY="${2:?--suanli-admin-key requires a value}"; shift 2 ;;
+    -h|--help)           usage ;;
     *) echo "❌ 未知参数: $1"; usage ;;
   esac
 done
@@ -70,6 +75,7 @@ echo "  ADMIN_API:     ${ADMIN_API}"
 echo "  PROVIDER:      ${AGENT_PROVIDER}"
 echo "  SSH_KEY:       ${SSH_KEY}"
 echo "  LLM_BASE_URL:  ${LLM_BASE_URL}"
+echo "  SUANLI_ADMIN:  ${SUANLI_ADMIN_KEY:0:8}...${SUANLI_ADMIN_KEY: -4}"
 if [ -n "${API_TOKEN}" ]; then
   echo "  API_TOKEN:     ${API_TOKEN:0:8}...${API_TOKEN: -4}"
 else
@@ -103,7 +109,7 @@ Environment=API_TOKEN=${API_TOKEN}
 Environment=DEEPSEEK_API_KEY=${API_TOKEN}
 Environment=LLM_BASE_URL=${LLM_BASE_URL}
 Environment=AGENT_PROVIDER=${AGENT_PROVIDER}
-Environment=SUANLI_ADMIN_KEY=ak-2b86a45f0af50d35067601ad61d8e153f53eb2b832cab396
+Environment=SUANLI_ADMIN_KEY=${SUANLI_ADMIN_KEY}
 
 ExecStart=/bin/bash -c 'curl -sL \${DEPLOY_SERVER}/register-agent.py -o /tmp/register-agent.py && curl -sL \${DEPLOY_SERVER}/deploy-and-register.sh -o /tmp/deploy-and-register.sh && bash /tmp/deploy-and-register.sh'
 
