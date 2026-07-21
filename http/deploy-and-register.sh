@@ -145,11 +145,14 @@ command -v pnpm >/dev/null 2>&1 || die "pnpm not on PATH after install"
 
 # 5. China mirror
 step "5/10 Network / mirror"
-LATENCY=$(curl -s -o /dev/null -w "%{time_total}" --connect-timeout 5 https://registry.npmjs.org 2>/dev/null || echo 99)
-log "npmjs latency: ${LATENCY}s"
+
+# 用 IP 属地判断是否走国内镜像，不用延迟（延迟波动不可靠）
+IP_COUNTRY=$(curl -s --connect-timeout 5 "http://ip-api.com/line/${IP}?fields=countryCode" 2>/dev/null || echo "??")
+log "IP country: ${IP_COUNTRY}"
+
 cd "${SSH_HOME}/openclaw"
-if [ "${LATENCY%%.*}" -ge 1 ] 2>/dev/null; then
-  log "Slow npmjs (${LATENCY}s) - enabling npmmirror"
+if [ "${IP_COUNTRY}" = "CN" ]; then
+  log "China IP - enabling npmmirror"
   echo "registry=https://registry.npmmirror.com" > "${SSH_HOME}/openclaw/.npmrc"
   mkdir -p "${SSH_HOME}/openclaw/node_modules/@matrix-org/matrix-sdk-crypto-nodejs"
   if curl -fL --connect-timeout 20 --max-time 120 \
@@ -161,7 +164,7 @@ if [ "${LATENCY%%.*}" -ge 1 ] 2>/dev/null; then
     log "WARN: matrix-sdk binary download failed (non-fatal)"
   fi
 else
-  log "npmjs fast (${LATENCY}s) - direct"
+  log "Non-China IP (${IP_COUNTRY}) - direct npmjs"
   : > "${SSH_HOME}/openclaw/.npmrc"
 fi
 
