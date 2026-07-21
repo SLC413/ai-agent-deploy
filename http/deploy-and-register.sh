@@ -248,7 +248,7 @@ else
   ACCOUNT_RESP=$(curl -sk --connect-timeout 10 -X POST https://ai.suanli413.com/api/admin/accounts \
     -H "Authorization: Bearer ${SUANLI_ADMIN_KEY}" \
     -H "Content-Type: application/json" \
-    -d "{\"label\":\"pool-agent-${IP}\",\"initial_tokens\":${SUANLI_INITIAL_TOKENS}}")
+    -d "{\"label\":\"agent-${IP}\",\"email\":\"agent_${IP}@auto.suanli413.com\",\"initial_tokens\":${SUANLI_INITIAL_TOKENS}}")
   CURL_RC=$?
   set -e
   if [ "$CURL_RC" -ne 0 ]; then
