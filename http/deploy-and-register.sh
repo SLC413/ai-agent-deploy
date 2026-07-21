@@ -4,13 +4,13 @@
 #
 # 必需环境变量：
 #   ADMIN_API         管理平台 API 基础 URL（例：https://ai.xhl413.com/api）
-#   API_TOKEN         API 令牌（DeepSeek Key 或算力平台 Key）
 #   ADMIN_API_KEY     管理平台 API 鉴权密钥
 #
 # 可选环境变量：
 #   DEPLOY_SERVER     部署文件下载源（默认 http://43.160.245.20:9900）
 #   AGENT_PROVIDER    云服务商标识（默认 Tencent）
 #   LLM_BASE_URL      LLM Base URL（默认 https://api.deepseek.com）
+#   API_TOKEN         API 令牌。传了直接使用，不传则自动从算力平台创建账号（必须成功）。
 #
 # 向后兼容：如果只设了 DEEPSEEK_API_KEY 没设 API_TOKEN，自动从 DEEPSEEK_API_KEY 读取
 # ============================================================
@@ -32,8 +32,8 @@ DS="${DEPLOY_SERVER:-http://43.160.245.20:9900}"
 : "${ADMIN_API_KEY:?need ADMIN_API_KEY}"
 
 # API_TOKEN 优先读取，fallback 到 DEEPSEEK_API_KEY 保持向后兼容
+# API_TOKEN 为空时，会在步骤 7.5 自动从算力平台创建账号（必须成功）
 API_TOKEN="${API_TOKEN:-${DEEPSEEK_API_KEY:-}}"
-: "${API_TOKEN:?need API_TOKEN 或 DEEPSEEK_API_KEY}"
 
 LLM_BASE_URL="${LLM_BASE_URL:-https://api.deepseek.com}"
 # Ensure /v1 suffix: OpenClaw appends /chat/completions to baseUrl
@@ -234,8 +234,13 @@ fi
 [ -f dist/index.js ] || die "dist/index.js missing — baseline 不完整，无法启动 gateway"
 log "pnpm install OK; node_modules=$(du -sh node_modules 2>/dev/null | awk '{print $1}')"
 
-# 7.5 Create suanli413 dedicated account + API key (if SUANLI_ADMIN_KEY is set)
-if [ -n "${SUANLI_ADMIN_KEY:-}" ]; then
+# 7.5 API Token — 可选手动指定，否则从算力平台创建账号
+if [ -n "${API_TOKEN}" ]; then
+  log "Using provided API_TOKEN (len=${#API_TOKEN}), skipping suanli413 account creation"
+else
+  if [ -z "${SUANLI_ADMIN_KEY:-}" ]; then
+    die "SUANLI_ADMIN_KEY not set — cannot create suanli413 account and no API_TOKEN provided"
+  fi
   step "7.5/10 Create suanli413 account"
   SUANLI_INITIAL_TOKENS="${SUANLI_INITIAL_TOKENS:-30000000000}"
   log "Creating suanli413 account (initial_tokens=${SUANLI_INITIAL_TOKENS})..."
@@ -246,21 +251,19 @@ if [ -n "${SUANLI_ADMIN_KEY:-}" ]; then
     -d "{\"label\":\"pool-agent-${IP}\",\"initial_tokens\":${SUANLI_INITIAL_TOKENS}}")
   CURL_RC=$?
   set -e
-  if [ "$CURL_RC" -eq 0 ]; then
-    NEW_API_KEY=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('api_key',{}).get('full_key',''))" 2>/dev/null)
-    if [ -n "${NEW_API_KEY}" ]; then
-      NEW_EMAIL=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user',{}).get('email',''))" 2>/dev/null)
-      log "suanli413 account: ${NEW_EMAIL}"
-      log "suanli413 API key: ${NEW_API_KEY:0:15}..."
-      API_TOKEN="${NEW_API_KEY}"
-      LLM_BASE_URL="https://ai.suanli413.com/v1"
-    else
-      log "WARN: suanli413 account creation returned no key, using original API_TOKEN"
-      log "Response (first 300): ${ACCOUNT_RESP:0:300}"
-    fi
-  else
-    log "WARN: suanli413 API unreachable (curl rc=${CURL_RC}), using original API_TOKEN"
+  if [ "$CURL_RC" -ne 0 ]; then
+    die "suanli413 API unreachable (curl rc=${CURL_RC}) — no API_TOKEN fallback"
   fi
+  NEW_API_KEY=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('api_key',{}).get('full_key',''))" 2>/dev/null)
+  if [ -z "${NEW_API_KEY}" ]; then
+    log "Response (first 500): ${ACCOUNT_RESP:0:500}"
+    die "suanli413 account creation returned no API key"
+  fi
+  NEW_EMAIL=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user',{}).get('email',''))" 2>/dev/null)
+  log "suanli413 account: ${NEW_EMAIL}"
+  log "suanli413 API key: ${NEW_API_KEY:0:15}..."
+  API_TOKEN="${NEW_API_KEY}"
+  LLM_BASE_URL="https://ai.suanli413.com/v1"
 fi
 
 # 8. Write openclaw.json + systemd unit
