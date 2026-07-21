@@ -1,5 +1,6 @@
 # 大文件
 openclaw-baseline.tar.gz
+http/v0.6.1/
 
 # 敏感信息
 .env
