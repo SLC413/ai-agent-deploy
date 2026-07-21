@@ -205,6 +205,10 @@ PY
 # 7. pnpm install
 step "7/10 pnpm install"
 
+# 设置二进制下载源为部署服务器，postinstall 二进制缺失时从这里下载
+# （正常情况第5步已预加载，postinstall 直接跳过）
+export MATRIX_SDK_CRYPTO_DOWNLOADS_BASE_URL="${DS}"
+
 cd "${SSH_HOME}/openclaw"
 rm -f npm-shrinkwrap.json
 # --no-frozen-lockfile 覆盖 CI=true 的默认行为，允许增量更新 lockfile
