@@ -89,7 +89,7 @@ r = subprocess.run([
         'serverProvider': provider,
         'skipConnectivityCheck': True,
         'computeEmail': os.environ.get('COMPUTE_EMAIL', ''),
-        'computeUserId': None,
+        'computeUserId': os.environ.get('COMPUTE_USER_ID') or None,
     }),
 ], capture_output=True, text=True, timeout=30)
 
