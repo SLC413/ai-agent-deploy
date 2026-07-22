@@ -284,10 +284,10 @@ else
   export COMPUTE_USER_ID
   COMPUTE_PASSWORD=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('password',''))" 2>/dev/null)
   export COMPUTE_PASSWORD
-  export COMPUTE_API_KEY="${API_TOKEN}"
   log "suanli413 account: ${NEW_EMAIL}"
   log "suanli413 API key: ${NEW_API_KEY:0:15}..."
   API_TOKEN="${NEW_API_KEY}"
+  export COMPUTE_API_KEY="${API_TOKEN}"
   LLM_BASE_URL="https://ai.suanli413.com/v1"
 fi
 
