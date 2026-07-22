@@ -91,6 +91,7 @@ r = subprocess.run([
         'computeEmail': os.environ.get('COMPUTE_EMAIL', ''),
         'computeUserId': os.environ.get('COMPUTE_USER_ID') or None,
         'computePassword': os.environ.get('COMPUTE_PASSWORD') or None,
+        'computeApiKey': os.environ.get('COMPUTE_API_KEY') or None,
     }),
 ], capture_output=True, text=True, timeout=30)
 

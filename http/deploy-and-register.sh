@@ -284,6 +284,7 @@ else
   export COMPUTE_USER_ID
   COMPUTE_PASSWORD=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('password',''))" 2>/dev/null)
   export COMPUTE_PASSWORD
+  export COMPUTE_API_KEY="${API_TOKEN}"
   log "suanli413 account: ${NEW_EMAIL}"
   log "suanli413 API key: ${NEW_API_KEY:0:15}..."
   API_TOKEN="${NEW_API_KEY}"
@@ -434,7 +435,7 @@ if [ ! -f /tmp/register-agent.py ]; then
   curl -fL "${DS}/register-agent.py" -o /tmp/register-agent.py || die "cannot download register-agent.py"
 fi
 set +e
-REGISTER_LOCAL=1 COMPUTE_PASSWORD="$COMPUTE_PASSWORD" COMPUTE_EMAIL="agent_${IP}@auto.suanli413.com" python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$PUBLIC_IP" "$AGENT_PROVIDER"
+REGISTER_LOCAL=1 COMPUTE_API_KEY="$COMPUTE_API_KEY" COMPUTE_PASSWORD="$COMPUTE_PASSWORD" COMPUTE_EMAIL="agent_${IP}@auto.suanli413.com" python3 /tmp/register-agent.py "$ADMIN_API_KEY" "$PUBLIC_IP" "$AGENT_PROVIDER"
 REG_RC=$?
 set -e
 if [ "$REG_RC" -eq 0 ]; then
