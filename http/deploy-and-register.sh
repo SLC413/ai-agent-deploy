@@ -254,6 +254,26 @@ else
   if [ "$CURL_RC" -ne 0 ]; then
     die "suanli413 API unreachable (curl rc=${CURL_RC}) — no API_TOKEN fallback"
   fi
+  # If email already exists (re-deploy on same IP), delete old account and retry
+  if echo "${ACCOUNT_RESP}" | grep -q '"email_exists"'; then
+    log "Account already exists for this IP — deleting old account..."
+    EXISTING_USER_ID=$(curl -sk --connect-timeout 10 \
+      -H "Authorization: Bearer ${SUANLI_ADMIN_KEY}" \
+      "https://ai.suanli413.com/api/admin/accounts/by-email/agent_${IP}@auto.suanli413.com" \
+      | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+    if [ -n "${EXISTING_USER_ID}" ]; then
+      curl -sk --connect-timeout 10 -X DELETE \
+        -H "Authorization: Bearer ${SUANLI_ADMIN_KEY}" \
+        "https://ai.suanli413.com/api/admin/accounts/${EXISTING_USER_ID}" >/dev/null 2>&1
+      log "Old account deleted, retrying creation..."
+      ACCOUNT_RESP=$(curl -sk --connect-timeout 10 -X POST https://ai.suanli413.com/api/admin/accounts \
+        -H "Authorization: Bearer ${SUANLI_ADMIN_KEY}" \
+        -H "Content-Type: application/json" \
+        -d '{"label":"agent-'"${IP}"'","email":"agent_'"${IP}"'@auto.suanli413.com","initial_tokens":'"${SUANLI_INITIAL_TOKENS}"'}')
+    else
+      log "WARN: email_exists but could not find user ID — continuing anyway"
+    fi
+  fi
   NEW_API_KEY=$(echo "${ACCOUNT_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('api_key',{}).get('full_key',''))" 2>/dev/null)
   if [ -z "${NEW_API_KEY}" ]; then
     log "Response (first 500): ${ACCOUNT_RESP:0:500}"
